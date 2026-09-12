@@ -4,6 +4,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/gin-gonic/gin"
+
+	"github.com/user/gpoptimizer/server/auth"
 	"github.com/user/gpoptimizer/server/store"
 )
 
@@ -18,6 +21,17 @@ func main() {
 	}
 	defer db.Close()
 	log.Println("connected to database")
-	// handlers added in Task 3+
-	select {}
+
+	addr := os.Getenv("SERVER_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+
+	r := gin.Default()
+	auth.Routes(r, db, auth.ConfigFromEnv())
+	// remaining handlers added in Task 5+
+
+	if err := r.Run(addr); err != nil {
+		log.Fatalf("server: %v", err)
+	}
 }
