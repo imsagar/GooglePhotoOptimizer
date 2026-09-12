@@ -26,7 +26,7 @@ type Client struct {
 	mu   sync.Mutex // guards conn writes (gorilla allows only one writer at a time)
 	conn *websocket.Conn
 
-	cmdFn func(protocol.Command)
+	cmdFn func(*Client, protocol.Command)
 }
 
 // NewClient builds a Client for cfg. Call SetCommandHandler before Run's
@@ -39,14 +39,15 @@ func NewClient(cfg *config.Config) *Client {
 }
 
 // SetCommandHandler wires the function invoked for each command the server
-// sends. Task 10's transcode pipeline hangs off this.
-func (c *Client) SetCommandHandler(fn func(protocol.Command)) {
+// sends. It receives the Client itself (to call SendStatus) alongside the
+// command — the runner's pipeline handlers hang off this.
+func (c *Client) SetCommandHandler(fn func(*Client, protocol.Command)) {
 	c.cmdFn = fn
 }
 
 // Run connects to the server and reconnects forever with exponential
 // backoff. cmdFn (may be nil) handles incoming commands.
-func Run(cfg *config.Config, cmdFn func(protocol.Command)) {
+func Run(cfg *config.Config, cmdFn func(*Client, protocol.Command)) {
 	c := NewClient(cfg)
 	c.SetCommandHandler(cmdFn)
 	c.connectLoop()
@@ -140,5 +141,5 @@ func (c *Client) handleCommand(cmd protocol.Command) {
 		log.Printf("runner ws: received command %q but no handler is registered", cmd.Type)
 		return
 	}
-	c.cmdFn(cmd)
+	c.cmdFn(c, cmd)
 }
