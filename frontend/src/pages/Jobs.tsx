@@ -7,12 +7,12 @@ import { ProgressBar } from "../components/ProgressBar";
 
 type Filter = "all" | "active" | "ready" | "uploaded" | "failed";
 
-const FILTER_STATUS: Record<Filter, string | undefined> = {
-  all: undefined,
-  active: "downloading", // server treats as downloading|encoding
-  ready: "ready",
-  uploaded: "uploaded",
-  failed: "failed",
+const FILTER_STATUSES: Record<Filter, string[]> = {
+  all: [],
+  active: ["downloading", "encoding"],
+  ready: ["ready"],
+  uploaded: ["uploaded"],
+  failed: ["failed"],
 };
 
 function formatSize(bytes: number): string {
@@ -30,16 +30,32 @@ export function Jobs() {
   const { lastEvent } = useWebSocket();
 
   const fetchJobs = () => {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("page_size", "20");
-    const status = FILTER_STATUS[filter];
-    if (status) params.set("status", status);
-
-    api.get<Paginated<Job>>(`/jobs?${params}`).then((r) => {
-      setJobs(r.data);
-      setTotal(r.total);
-    }).catch(() => {});
+    const statuses = FILTER_STATUSES[filter];
+    if (statuses.length <= 1) {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", "20");
+      if (statuses.length === 1) params.set("status", statuses[0]);
+      api.get<Paginated<Job>>(`/jobs?${params}`).then((r) => {
+        setJobs(r.data);
+        setTotal(r.total);
+      }).catch(() => {});
+    } else {
+      Promise.all(
+        statuses.map((s) => {
+          const params = new URLSearchParams();
+          params.set("page", String(page));
+          params.set("page_size", "20");
+          params.set("status", s);
+          return api.get<Paginated<Job>>(`/jobs?${params}`);
+        })
+      ).then((results) => {
+        const merged = results.flatMap((r) => r.data);
+        const totalCount = results.reduce((sum, r) => sum + r.total, 0);
+        setJobs(merged);
+        setTotal(totalCount);
+      }).catch(() => {});
+    }
   };
 
   useEffect(fetchJobs, [filter, page]);
