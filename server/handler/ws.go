@@ -25,7 +25,7 @@ var upgrader = websocket.Upgrader{
 // HandleUIWebSocket streams relay events for the authenticated user to a UI
 // client. Read-only from the UI's perspective: the UI never sends commands
 // over this socket (that's plain REST, added in Task 6).
-func HandleUIWebSocket(r relay.Relay) gin.HandlerFunc {
+func HandleUIWebSocket(db *store.DB, r relay.Relay) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.MustGet("userID").(uuid.UUID)
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -36,6 +36,12 @@ func HandleUIWebSocket(r relay.Relay) gin.HandlerFunc {
 
 		ch := r.Subscribe(userID, relay.ChanUI)
 		defer r.Unsubscribe(userID, relay.ChanUI)
+
+		runner, err := db.GetRunnerByUserID(c.Request.Context(), userID)
+		if err == nil && runner.Status == "online" {
+			initMsg, _ := json.Marshal(map[string]interface{}{"type": "connected", "platform": runner.Platform})
+			conn.WriteMessage(websocket.TextMessage, initMsg)
+		}
 
 		for msg := range ch {
 			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {

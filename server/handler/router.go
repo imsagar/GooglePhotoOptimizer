@@ -40,7 +40,7 @@ func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 	api.GET("/cleanup/local-files", HandleListLocalFiles(r))
 	api.POST("/cleanup/local-files/delete", HandleDeleteLocalFiles(r))
 
-	router.GET("/ws/ui", auth.Middleware(), HandleUIWebSocket(r))
+	router.GET("/ws/ui", auth.Middleware(), HandleUIWebSocket(db, r))
 	router.GET("/ws/runner", HandleRunnerWebSocket(db, r))
 
 	return router
