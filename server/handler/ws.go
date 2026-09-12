@@ -14,6 +14,7 @@ import (
 
 	"github.com/user/gpoptimizer/internal/crypto"
 	"github.com/user/gpoptimizer/internal/protocol"
+	"github.com/user/gpoptimizer/server/auth"
 	"github.com/user/gpoptimizer/server/relay"
 	"github.com/user/gpoptimizer/server/store"
 )
@@ -56,7 +57,7 @@ func HandleUIWebSocket(db *store.DB, r relay.Relay) gin.HandlerFunc {
 // relays encrypted commands/status between the runner and the relay. Every
 // message after auth is AES-256-GCM sealed under a key derived from the
 // runner's token via HKDF.
-func HandleRunnerWebSocket(db *store.DB, r relay.Relay) gin.HandlerFunc {
+func HandleRunnerWebSocket(db *store.DB, r relay.Relay, authCfg auth.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -96,6 +97,19 @@ func HandleRunnerWebSocket(db *store.DB, r relay.Relay) gin.HandlerFunc {
 			offMsg, _ := json.Marshal(map[string]string{"type": "runner_offline"})
 			r.SendToUI(userID, offMsg)
 		}()
+
+		if tokenJSON, err := db.GetGoogleToken(c.Request.Context(), userID); err == nil && tokenJSON != "" {
+			credCmd, _ := json.Marshal(protocol.Command{
+				Type:         "google_credentials",
+				ClientID:     authCfg.ClientID,
+				ClientSecret: authCfg.ClientSecret,
+				TokenJSON:    tokenJSON,
+			})
+			encrypted, err := crypto.Encrypt(aesKey, credCmd)
+			if err == nil {
+				conn.WriteMessage(websocket.TextMessage, []byte(encrypted))
+			}
+		}
 
 		cmdCh := r.Subscribe(userID, relay.ChanRunner)
 		defer r.Unsubscribe(userID, relay.ChanRunner)

@@ -80,11 +80,11 @@ export function Settings() {
         {runnerOnline && (
           <div>
             <p className="text-text-secondary text-sm mb-3">
-              Connect Google Photos on your runner to sync and optimize videos. This opens a browser window on the machine running the runner.
+              Connect your Google Photos account to sync and optimize videos.
             </p>
-            <button onClick={() => api.post("/runner/google-auth")} className={btnClass}>
+            <a href="/api/auth/google/photos" className={btnClass + " inline-block text-center no-underline"}>
               Connect Google Photos
-            </button>
+            </a>
           </div>
         )}
       </div>

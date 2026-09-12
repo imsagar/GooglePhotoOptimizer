@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 // CreateUser upserts a user by email — Google Sign-In returns the same
@@ -16,6 +18,25 @@ func (db *DB) CreateUser(ctx context.Context, email, name, avatarURL string) (Us
 		email, name, avatarURL,
 	).Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.CreatedAt)
 	return u, err
+}
+
+func (db *DB) SaveGoogleToken(ctx context.Context, userID uuid.UUID, tokenJSON string) error {
+	_, err := db.pool.ExecContext(ctx,
+		`UPDATE users SET google_token = $1 WHERE id = $2`,
+		tokenJSON, userID,
+	)
+	return err
+}
+
+func (db *DB) GetGoogleToken(ctx context.Context, userID uuid.UUID) (string, error) {
+	var tok sql.NullString
+	err := db.pool.QueryRowContext(ctx,
+		`SELECT google_token FROM users WHERE id = $1`, userID,
+	).Scan(&tok)
+	if err != nil {
+		return "", err
+	}
+	return tok.String, nil
 }
 
 func (db *DB) GetUserByEmail(ctx context.Context, email string) (User, error) {

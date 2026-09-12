@@ -11,6 +11,9 @@ import (
 	"os"
 	"sync"
 
+	"golang.org/x/oauth2"
+	oauthgoogle "golang.org/x/oauth2/google"
+
 	"github.com/user/gpoptimizer/internal/protocol"
 	"github.com/user/gpoptimizer/runner/config"
 	"github.com/user/gpoptimizer/runner/ffmpeg"
@@ -30,13 +33,11 @@ type jobState struct {
 }
 
 // runnerState holds everything the command handler needs across commands:
-// the Google API clients (nil until authenticated), a cache of the video
-// metadata from the last sync, and in-flight job paths.
+// the Google API clients (nil until the server sends credentials), a cache
+// of the video metadata from the last sync, and in-flight job paths.
 type runnerState struct {
-	cfg          *config.Config
-	ffmpegPath   string
-	clientID     string
-	clientSecret string
+	cfg        *config.Config
+	ffmpegPath string
 
 	mu     sync.Mutex
 	photos *google.PhotosClient
@@ -71,37 +72,13 @@ func main() {
 	}
 
 	s := &runnerState{
-		cfg:          cfg,
-		ffmpegPath:   ffmpegPath,
-		clientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		clientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		videos:       make(map[string]google.VideoMeta),
-		jobs:         make(map[int]*jobState),
+		cfg:        cfg,
+		ffmpegPath: ffmpegPath,
+		videos:     make(map[string]google.VideoMeta),
+		jobs:       make(map[int]*jobState),
 	}
-	s.loadGoogleClients() // best-effort; nil clients until start_google_auth succeeds
 
 	ws.Run(cfg, s.handleCommand)
-}
-
-// loadGoogleClients builds the Photos/Drive clients from a previously saved
-// token, if any. Logs and continues (clients stay nil) if there isn't one
-// yet — the user authenticates via the start_google_auth command.
-func (s *runnerState) loadGoogleClients() {
-	tok, err := google.LoadToken()
-	if err != nil {
-		log.Printf("runner: no saved Google token yet: %v", err)
-		return
-	}
-	oauthCfg := google.NewOAuthConfig(s.clientID, s.clientSecret)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.photos = google.NewPhotosClient(tok, oauthCfg)
-	drive, err := google.NewDriveClient(tok, oauthCfg)
-	if err != nil {
-		log.Printf("runner: build drive client: %v", err)
-		return
-	}
-	s.drive = drive
 }
 
 // handleCommand dispatches one command from the server to the matching
@@ -110,6 +87,8 @@ func (s *runnerState) handleCommand(c *ws.Client, cmd protocol.Command) {
 	ctx := context.Background()
 
 	switch cmd.Type {
+	case "google_credentials":
+		s.handleGoogleCredentials(c, cmd)
 	case "download":
 		s.handleDownload(ctx, c, cmd)
 	case "encode":
@@ -120,11 +99,38 @@ func (s *runnerState) handleCommand(c *ws.Client, cmd protocol.Command) {
 		s.handleSyncVideos(ctx, c)
 	case "delete_local":
 		s.handleDeleteLocal(c, cmd)
-	case "start_google_auth":
-		s.handleStartGoogleAuth(c)
 	default:
 		log.Printf("runner: unknown command type %q", cmd.Type)
 	}
+}
+
+func (s *runnerState) handleGoogleCredentials(c *ws.Client, cmd protocol.Command) {
+	var tok oauth2.Token
+	if err := json.Unmarshal([]byte(cmd.TokenJSON), &tok); err != nil {
+		log.Printf("runner: parse google token: %v", err)
+		return
+	}
+
+	oauthCfg := &oauth2.Config{
+		ClientID:     cmd.ClientID,
+		ClientSecret: cmd.ClientSecret,
+		Scopes:       google.Scopes,
+		Endpoint:     oauthgoogle.Endpoint,
+	}
+
+	drive, err := google.NewDriveClient(&tok, oauthCfg)
+	if err != nil {
+		log.Printf("runner: build drive client: %v", err)
+		return
+	}
+
+	s.mu.Lock()
+	s.photos = google.NewPhotosClient(&tok, oauthCfg)
+	s.drive = drive
+	s.mu.Unlock()
+
+	log.Println("runner: Google Photos connected via server credentials")
+	c.SendStatus(protocol.Status{Type: "google_auth_status", Connected: true})
 }
 
 func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd protocol.Command) {
@@ -134,7 +140,7 @@ func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd prot
 	s.mu.Unlock()
 
 	if photos == nil {
-		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "not connected to Google Photos; run start_google_auth"})
+		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "not connected to Google Photos; connect via Settings in the web UI"})
 		return
 	}
 	if !ok {
@@ -144,7 +150,7 @@ func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd prot
 
 	path, err := pipeline.HandleDownload(ctx, c.SendStatus, photos, s.cfg, cmd.VideoID, cmd.JobID, meta.BaseURL)
 	if err != nil {
-		return // pipeline already sent an error status
+		return
 	}
 
 	s.mu.Lock()
@@ -163,11 +169,6 @@ func (s *runnerState) handleEncode(ctx context.Context, c *ws.Client, cmd protoc
 	}
 
 	opts := ffmpeg.EncodeOpts{Codec: cmd.Codec, CRF: cmd.CRF, Preset: cmd.Preset}
-	// ponytail: durationMs is 0 (unknown) — Google Photos' mediaItems:search
-	// doesn't return video duration, so ffmpeg.Encode's progress-from-time
-	// calculation is skipped; job_complete still fires at the end. Add a
-	// duration probe (ffprobe, or metadata.video from Photos) if per-job
-	// progress percentages during encode turn out to matter.
 	outPath, err := pipeline.HandleEncode(ctx, c.SendStatus, s.ffmpegPath, s.cfg, job.originalPath, cmd.JobID, opts, 0)
 	if err != nil {
 		return
@@ -185,7 +186,7 @@ func (s *runnerState) handleUpload(ctx context.Context, c *ws.Client, cmd protoc
 	s.mu.Unlock()
 
 	if drive == nil {
-		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "not connected to Google Drive; run start_google_auth"})
+		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "not connected to Google Drive; connect via Settings in the web UI"})
 		return
 	}
 	if job == nil || job.encodedPath == "" {
@@ -213,7 +214,7 @@ func (s *runnerState) handleSyncVideos(ctx context.Context, c *ws.Client) {
 	photos := s.photos
 	s.mu.Unlock()
 	if photos == nil {
-		c.SendStatus(protocol.Status{Type: "error", Message: "not connected to Google Photos; run start_google_auth"})
+		c.SendStatus(protocol.Status{Type: "error", Message: "not connected to Google Photos; connect via Settings in the web UI"})
 		return
 	}
 
@@ -249,28 +250,4 @@ func (s *runnerState) handleDeleteLocal(c *ws.Client, cmd protocol.Command) {
 		deleted++
 	}
 	c.SendStatus(protocol.Status{Type: "delete_local_complete", Count: deleted})
-}
-
-func (s *runnerState) handleStartGoogleAuth(c *ws.Client) {
-	tok, oauthCfg, err := google.StartLocalAuth(s.clientID, s.clientSecret)
-	if err != nil {
-		c.SendStatus(protocol.Status{Type: "error", Message: fmt.Sprintf("google auth: %v", err)})
-		return
-	}
-	if err := google.SaveToken(tok); err != nil {
-		log.Printf("runner: save google token: %v", err)
-	}
-
-	drive, err := google.NewDriveClient(tok, oauthCfg)
-	if err != nil {
-		c.SendStatus(protocol.Status{Type: "error", Message: fmt.Sprintf("google auth: %v", err)})
-		return
-	}
-
-	s.mu.Lock()
-	s.photos = google.NewPhotosClient(tok, oauthCfg)
-	s.drive = drive
-	s.mu.Unlock()
-
-	c.SendStatus(protocol.Status{Type: "google_auth_status", Connected: true})
 }

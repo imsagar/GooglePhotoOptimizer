@@ -26,7 +26,6 @@ func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 
 	api.GET("/videos", HandleListVideos(db))
 	api.POST("/videos/sync", HandleSyncVideos(r))
-	api.POST("/runner/google-auth", HandleGoogleAuth(r))
 
 	api.POST("/jobs", HandleCreateJobs(db, r))
 	api.GET("/jobs", HandleListJobs(db))
@@ -42,7 +41,7 @@ func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 	api.POST("/cleanup/local-files/delete", HandleDeleteLocalFiles(r))
 
 	router.GET("/ws/ui", auth.Middleware(), HandleUIWebSocket(db, r))
-	router.GET("/ws/runner", HandleRunnerWebSocket(db, r))
+	router.GET("/ws/runner", HandleRunnerWebSocket(db, r, authCfg))
 
 	return router
 }

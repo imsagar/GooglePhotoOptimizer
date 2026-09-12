@@ -14,6 +14,10 @@ type Command struct {
 	Preset         string   `json:"preset,omitempty"`
 	DeleteOriginal bool     `json:"delete_original,omitempty"`
 	Targets        []string `json:"targets,omitempty"` // for delete_local
+	// google_credentials: server sends OAuth token + config to runner
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+	TokenJSON    string `json:"token_json,omitempty"`
 }
 
 // Status is sent Runner → Server.

@@ -82,6 +82,11 @@ type googleUserInfo struct {
 //	GET  /api/auth/google/callback exchange code, upsert user, start session
 //	POST /api/auth/logout          clear session
 //	GET  /api/auth/me              current user as JSON
+var photosScopes = []string{
+	"https://www.googleapis.com/auth/photoslibrary.readonly",
+	"https://www.googleapis.com/auth/drive.file",
+}
+
 func Routes(r *gin.Engine, db *store.DB, cfg Config) {
 	oauthCfg := oauthConfig(cfg)
 	sessionStore := newSessionStore(cfg)
@@ -92,6 +97,7 @@ func Routes(r *gin.Engine, db *store.DB, cfg Config) {
 	g.GET("/google/callback", handleCallback(db, oauthCfg, sessionStore))
 	g.POST("/logout", handleLogout(sessionStore))
 	g.GET("/me", Middleware(), handleMe(sessionStore))
+	g.GET("/google/photos", Middleware(), handleGooglePhotosLogin(cfg, sessionStore))
 }
 
 func handleGoogleLogin(oauthCfg *oauth2.Config, sessionStore *sessions.CookieStore) gin.HandlerFunc {
@@ -107,6 +113,27 @@ func handleGoogleLogin(oauthCfg *oauth2.Config, sessionStore *sessions.CookieSto
 	}
 }
 
+func handleGooglePhotosLogin(cfg Config, sessionStore *sessions.CookieStore) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		photosCfg := &oauth2.Config{
+			ClientID:     cfg.ClientID,
+			ClientSecret: cfg.ClientSecret,
+			RedirectURL:  cfg.RedirectURL,
+			Scopes:       photosScopes,
+			Endpoint:     google.Endpoint,
+		}
+		state := uuid.NewString()
+		sess, _ := sessionStore.Get(c.Request, sessionName)
+		sess.Values["oauth_state"] = state
+		sess.Values["oauth_flow"] = "photos"
+		if err := sess.Save(c.Request, c.Writer); err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.Redirect(http.StatusFound, photosCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent")))
+	}
+}
+
 func handleCallback(db *store.DB, oauthCfg *oauth2.Config, sessionStore *sessions.CookieStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sess, _ := sessionStore.Get(c.Request, sessionName)
@@ -116,7 +143,41 @@ func handleCallback(db *store.DB, oauthCfg *oauth2.Config, sessionStore *session
 			return
 		}
 
+		flow, _ := sess.Values["oauth_flow"].(string)
+		delete(sess.Values, "oauth_flow")
+
 		code := c.Query("code")
+
+		if flow == "photos" {
+			raw, _ := sess.Values["user_id"].(string)
+			userID, err := uuid.Parse(raw)
+			if err != nil || raw == "" {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
+			photosCfg := &oauth2.Config{
+				ClientID:     oauthCfg.ClientID,
+				ClientSecret: oauthCfg.ClientSecret,
+				RedirectURL:  oauthCfg.RedirectURL,
+				Scopes:       photosScopes,
+				Endpoint:     google.Endpoint,
+			}
+			token, err := photosCfg.Exchange(c.Request.Context(), code)
+			if err != nil {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
+			tokenJSON, _ := json.Marshal(token)
+			if err := db.SaveGoogleToken(c.Request.Context(), userID, string(tokenJSON)); err != nil {
+				c.AbortWithStatus(http.StatusInternalServerError)
+				return
+			}
+			delete(sess.Values, "oauth_state")
+			_ = sess.Save(c.Request, c.Writer)
+			c.Redirect(http.StatusFound, "/settings")
+			return
+		}
+
 		token, err := oauthCfg.Exchange(c.Request.Context(), code)
 		if err != nil {
 			c.AbortWithStatus(http.StatusUnauthorized)

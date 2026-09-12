@@ -6,6 +6,7 @@ CREATE TABLE users (
     email      TEXT UNIQUE NOT NULL,
     name       TEXT,
     avatar_url TEXT,
+    google_token TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
