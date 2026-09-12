@@ -128,18 +128,18 @@ func (db *DB) GetJob(ctx context.Context, jobID int, userID uuid.UUID) (Job, err
 	return j, err
 }
 
-func (db *DB) UpdateJobStatus(ctx context.Context, jobID int, status string, progress int) error {
+func (db *DB) UpdateJobStatus(ctx context.Context, jobID int, userID uuid.UUID, status string, progress int) error {
 	_, err := db.pool.ExecContext(ctx,
-		`UPDATE jobs SET status = $1, progress = $2, updated_at = NOW() WHERE id = $3`,
-		status, progress, jobID,
+		`UPDATE jobs SET status = $1, progress = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
+		status, progress, jobID, userID,
 	)
 	return err
 }
 
-func (db *DB) UpdateJobResult(ctx context.Context, jobID int, optimizedSize int64, savingsPct float32) error {
+func (db *DB) UpdateJobResult(ctx context.Context, jobID int, userID uuid.UUID, optimizedSize int64, savingsPct float32) error {
 	_, err := db.pool.ExecContext(ctx,
-		`UPDATE jobs SET optimized_size = $1, savings_pct = $2, updated_at = NOW() WHERE id = $3`,
-		optimizedSize, savingsPct, jobID,
+		`UPDATE jobs SET optimized_size = $1, savings_pct = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
+		optimizedSize, savingsPct, jobID, userID,
 	)
 	return err
 }
