@@ -44,8 +44,8 @@ export function Videos() {
     if (dateTo) params.set("to", dateTo);
 
     api.get<Paginated<VideoRow>>(`/videos?${params}`).then((r) => {
-      setVideos(r.data);
-      setTotal(r.total);
+      setVideos(r.data ?? []);
+      setTotal(r.total ?? 0);
     }).catch(() => {});
   };
 

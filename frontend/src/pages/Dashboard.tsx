@@ -29,8 +29,8 @@ export function Dashboard() {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    api.get<Paginated<Job>>("/jobs?page_size=5").then((r) => setJobs(r.data)).catch(() => {});
-    api.get<Paginated<unknown>>("/videos?page_size=1").then((r) => setVideoCount(r.total)).catch(() => {});
+    api.get<Paginated<Job>>("/jobs?page_size=5").then((r) => setJobs(r.data ?? [])).catch(() => {});
+    api.get<Paginated<unknown>>("/videos?page_size=1").then((r) => setVideoCount(r.total ?? 0)).catch(() => {});
   }, []);
 
   useEffect(() => {

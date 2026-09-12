@@ -37,8 +37,8 @@ export function Jobs() {
       params.set("page_size", "20");
       if (statuses.length === 1) params.set("status", statuses[0]);
       api.get<Paginated<Job>>(`/jobs?${params}`).then((r) => {
-        setJobs(r.data);
-        setTotal(r.total);
+        setJobs(r.data ?? []);
+        setTotal(r.total ?? 0);
       }).catch(() => {});
     } else {
       Promise.all(
@@ -50,8 +50,8 @@ export function Jobs() {
           return api.get<Paginated<Job>>(`/jobs?${params}`);
         })
       ).then((results) => {
-        const merged = results.flatMap((r) => r.data);
-        const totalCount = results.reduce((sum, r) => sum + r.total, 0);
+        const merged = results.flatMap((r) => r.data ?? []);
+        const totalCount = results.reduce((sum, r) => sum + (r.total ?? 0), 0);
         setJobs(merged);
         setTotal(totalCount);
       }).catch(() => {});

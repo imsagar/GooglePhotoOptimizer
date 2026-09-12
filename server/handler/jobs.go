@@ -114,7 +114,7 @@ func HandleListJobs(db *store.DB) gin.HandlerFunc {
 			pageSize = 50
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"jobs":      jobs,
+			"data":      jobs,
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,
