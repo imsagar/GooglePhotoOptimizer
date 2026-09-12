@@ -1,5 +1,5 @@
 // Command runner is the local GPOptimizer agent: pairs with the server and
-// (once Task 8 lands) connects over WebSocket to transcode videos.
+// connects over WebSocket to transcode videos.
 package main
 
 import (
@@ -9,7 +9,9 @@ import (
 	"os"
 
 	"github.com/user/gpoptimizer/runner/config"
+	"github.com/user/gpoptimizer/runner/ffmpeg"
 	"github.com/user/gpoptimizer/runner/pairing"
+	"github.com/user/gpoptimizer/runner/ws"
 )
 
 func main() {
@@ -26,11 +28,17 @@ func main() {
 		return
 	}
 
-	if _, err := config.Load(); err != nil {
+	cfg, err := config.Load()
+	if err != nil {
 		fmt.Println("Not paired yet. Run with: --pair <CODE> --server <URL>")
 		os.Exit(1)
 	}
 
-	// TODO(task 8): ensure FFmpeg and connect over WebSocket.
-	fmt.Println("Runner not yet implemented. Run with --pair to set up.")
+	if _, err := ffmpeg.EnsureInstalled(); err != nil {
+		log.Fatal(err)
+	}
+
+	// cmdFn is nil until Task 10 wires in the transcode pipeline; until then
+	// incoming commands are just logged (see ws.Client.handleCommand).
+	ws.Run(cfg, nil)
 }

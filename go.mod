@@ -10,6 +10,7 @@ require (
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/gorilla/sessions v1.4.0
+	github.com/gorilla/websocket v1.5.3
 	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.37.0
 )
@@ -27,7 +28,6 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
