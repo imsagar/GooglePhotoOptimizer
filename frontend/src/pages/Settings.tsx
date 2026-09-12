@@ -73,10 +73,20 @@ export function Settings() {
       {/* Google Photos Connection */}
       <div className={cardClass}>
         <h2 className="text-lg font-semibold text-text-primary mb-4">Google Photos Connection</h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-4">
           <span className={`inline-block w-2.5 h-2.5 rounded-full ${runnerOnline ? "bg-accent" : "bg-status-failed"}`} />
           <span className="text-text-primary">{runnerOnline ? "Runner connected" : "Runner disconnected"}</span>
         </div>
+        {runnerOnline && (
+          <div>
+            <p className="text-text-secondary text-sm mb-3">
+              Connect Google Photos on your runner to sync and optimize videos. This opens a browser window on the machine running the runner.
+            </p>
+            <button onClick={() => api.post("/runner/google-auth")} className={btnClass}>
+              Connect Google Photos
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Optimization Defaults */}

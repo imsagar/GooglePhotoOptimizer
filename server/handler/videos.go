@@ -76,6 +76,20 @@ func HandleListVideos(db *store.DB) gin.HandlerFunc {
 	}
 }
 
+// HandleGoogleAuth tells the runner to start its local OAuth flow.
+func HandleGoogleAuth(r relay.Relay) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := auth.UserID(c)
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		cmd, _ := json.Marshal(protocol.Command{Type: "start_google_auth"})
+		r.SendToRunner(userID, cmd)
+		c.JSON(http.StatusAccepted, gin.H{"status": "requested"})
+	}
+}
+
 // HandleSyncVideos asks the user's runner to re-scan Google Photos and push
 // updated video metadata back over /ws/runner (handled as a "videos_synced"
 // status in ws.go). Fire-and-forget: the request just queues the command.
