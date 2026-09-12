@@ -17,7 +17,7 @@ func init() {
 func TestMiddleware_NoSession(t *testing.T) {
 	sessionStore := sessions.NewCookieStore([]byte("test-secret"))
 	r := gin.New()
-	r.GET("/protected", Middleware(sessionStore), func(c *gin.Context) {
+	r.GET("/protected", middlewareFor(sessionStore), func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
@@ -35,7 +35,7 @@ func TestMiddleware_ValidSession(t *testing.T) {
 	wantID := uuid.New()
 
 	r := gin.New()
-	r.GET("/protected", Middleware(sessionStore), func(c *gin.Context) {
+	r.GET("/protected", middlewareFor(sessionStore), func(c *gin.Context) {
 		got, err := UserID(c)
 		if err != nil {
 			t.Errorf("UserID() error: %v", err)
@@ -64,5 +64,26 @@ func TestMiddleware_ValidSession(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 with valid session, got %d", w.Code)
+	}
+}
+
+// TestMiddleware_PackageLevel exercises the zero-arg Middleware() that
+// Tasks 5/6 will call directly (router.Use(auth.Middleware())): it must use
+// whatever store Routes() wired up as sharedSessionStore.
+func TestMiddleware_PackageLevel(t *testing.T) {
+	sharedSessionStore = sessions.NewCookieStore([]byte("test-secret"))
+	t.Cleanup(func() { sharedSessionStore = nil })
+
+	r := gin.New()
+	r.GET("/protected", Middleware(), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 with no session cookie, got %d", w.Code)
 	}
 }

@@ -19,6 +19,12 @@ import (
 
 const sessionName = "gpoptimizer_session"
 
+// sharedSessionStore backs the package-level Middleware() so downstream
+// packages (Tasks 5/6) can do router.Use(auth.Middleware()) without holding
+// a reference to the store built in Routes(). Set once, at startup, by
+// Routes(); read-only after that.
+var sharedSessionStore *sessions.CookieStore
+
 // Config holds Google OAuth2 credentials and the session signing secret.
 // All fields are expected to come from environment variables.
 type Config struct {
@@ -79,12 +85,13 @@ type googleUserInfo struct {
 func Routes(r *gin.Engine, db *store.DB, cfg Config) {
 	oauthCfg := oauthConfig(cfg)
 	sessionStore := newSessionStore(cfg)
+	sharedSessionStore = sessionStore
 
 	g := r.Group("/api/auth")
 	g.GET("/google", handleGoogleLogin(oauthCfg, sessionStore))
 	g.GET("/google/callback", handleCallback(db, oauthCfg, sessionStore))
 	g.POST("/logout", handleLogout(sessionStore))
-	g.GET("/me", Middleware(sessionStore), handleMe(sessionStore))
+	g.GET("/me", Middleware(), handleMe(sessionStore))
 }
 
 func handleGoogleLogin(oauthCfg *oauth2.Config, sessionStore *sessions.CookieStore) gin.HandlerFunc {
@@ -181,8 +188,13 @@ func handleMe(sessionStore *sessions.CookieStore) gin.HandlerFunc {
 
 // Middleware reads the session cookie, resolves the logged-in user ID and
 // sets it on the context as c.Set("userID", uuid.UUID). Responds 401 if
-// there is no valid session.
-func Middleware(sessionStore *sessions.CookieStore) gin.HandlerFunc {
+// there is no valid session. Routes() must be called once at startup before
+// any handler using this middleware runs.
+func Middleware() gin.HandlerFunc {
+	return middlewareFor(sharedSessionStore)
+}
+
+func middlewareFor(sessionStore *sessions.CookieStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sess, err := sessionStore.Get(c.Request, sessionName)
 		if err != nil {
