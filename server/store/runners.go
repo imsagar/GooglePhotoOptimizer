@@ -14,7 +14,7 @@ func (db *DB) CreateRunner(ctx context.Context, userID uuid.UUID, tokenHash, pla
 	err := db.pool.QueryRowContext(ctx,
 		`INSERT INTO runners (user_id, token_hash, platform, arch)
          VALUES ($1, $2, $3, $4)
-         RETURNING id, user_id, token_hash, label, platform, arch, ffmpeg_version,
+         RETURNING id, user_id, token_hash, COALESCE(label,''), platform, arch, COALESCE(ffmpeg_version,''),
                    google_connected, last_seen_at, status, created_at`,
 		userID, tokenHash, platform, arch,
 	).Scan(&r.ID, &r.UserID, &r.TokenHash, &r.Label, &r.Platform, &r.Arch, &r.FFmpegVersion,
@@ -25,7 +25,7 @@ func (db *DB) CreateRunner(ctx context.Context, userID uuid.UUID, tokenHash, pla
 func (db *DB) GetRunnerByUserID(ctx context.Context, userID uuid.UUID) (Runner, error) {
 	var r Runner
 	err := db.pool.QueryRowContext(ctx,
-		`SELECT id, user_id, token_hash, label, platform, arch, ffmpeg_version,
+		`SELECT id, user_id, token_hash, COALESCE(label,''), platform, arch, COALESCE(ffmpeg_version,''),
                 google_connected, last_seen_at, status, created_at
          FROM runners WHERE user_id = $1`,
 		userID,
@@ -53,7 +53,7 @@ func (db *DB) UpdateRunnerStatus(ctx context.Context, runnerID uuid.UUID, status
 // token-prefix index if the runner table gets large.
 func (db *DB) AuthenticateRunner(ctx context.Context, token string) (Runner, error) {
 	rows, err := db.pool.QueryContext(ctx,
-		`SELECT id, user_id, token_hash, label, platform, arch, ffmpeg_version,
+		`SELECT id, user_id, token_hash, COALESCE(label,''), platform, arch, COALESCE(ffmpeg_version,''),
                 google_connected, last_seen_at, status, created_at
          FROM runners`,
 	)

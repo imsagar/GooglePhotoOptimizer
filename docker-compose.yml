@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: gpopt
       POSTGRES_DB: gpoptimizer
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gpopt"]
+      test: ["CMD-SHELL", "pg_isready -U gpopt -d gpoptimizer"]
       interval: 2s
       timeout: 5s
       retries: 5
