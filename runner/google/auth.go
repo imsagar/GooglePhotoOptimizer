@@ -111,6 +111,8 @@ func SaveToken(tok *oauth2.Token) error {
 }
 
 // LoadToken reads a previously saved OAuth token from disk.
+// ponytail: in-memory refresh works but refreshed token isn't persisted back;
+// wrap with oauth2.ReuseTokenSource + save-on-refresh callback in Task 10's main loop
 func LoadToken() (*oauth2.Token, error) {
 	data, err := os.ReadFile(tokenPath())
 	if err != nil {
