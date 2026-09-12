@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { useWebSocket } from "../hooks/useWebSocket";
 
 interface OptSettings {
   codec: string;
@@ -12,7 +11,6 @@ const CODECS = ["libx265", "libx264", "libsvtav1"];
 const PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"];
 
 export function Settings() {
-  const { runnerOnline } = useWebSocket();
   const [pairingCode, setPairingCode] = useState("");
   const [settings, setSettings] = useState<OptSettings>({ codec: "libx265", crf: 28, preset: "medium" });
   const [saved, setSaved] = useState(false);
@@ -73,20 +71,12 @@ export function Settings() {
       {/* Google Photos Connection */}
       <div className={cardClass}>
         <h2 className="text-lg font-semibold text-text-primary mb-4">Google Photos Connection</h2>
-        <div className="flex items-center gap-3 mb-4">
-          <span className={`inline-block w-2.5 h-2.5 rounded-full ${runnerOnline ? "bg-accent" : "bg-status-failed"}`} />
-          <span className="text-text-primary">{runnerOnline ? "Runner connected" : "Runner disconnected"}</span>
-        </div>
-        {runnerOnline && (
-          <div>
-            <p className="text-text-secondary text-sm mb-3">
-              Connect your Google Photos account to sync and optimize videos.
-            </p>
-            <a href="/api/auth/google/photos" className={btnClass + " inline-block text-center no-underline"}>
-              Connect Google Photos
-            </a>
-          </div>
-        )}
+        <p className="text-text-secondary text-sm mb-3">
+          Connect your Google Photos account to sync and optimize videos.
+        </p>
+        <a href="/api/auth/google/photos" className={btnClass + " inline-block text-center no-underline"}>
+          Connect Google Photos
+        </a>
       </div>
 
       {/* Optimization Defaults */}

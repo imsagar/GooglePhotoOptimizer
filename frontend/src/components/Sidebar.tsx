@@ -10,6 +10,11 @@ const links = [
 ];
 
 export function Sidebar({ runnerOnline, runnerPlatform }: { runnerOnline: boolean; runnerPlatform: string }) {
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    window.location.href = "/";
+  };
+
   return (
     <aside className="w-60 shrink-0 bg-bg-secondary border-r border-border flex flex-col h-screen sticky top-0">
       <div className="px-4 py-5">
@@ -33,6 +38,14 @@ export function Sidebar({ runnerOnline, runnerPlatform }: { runnerOnline: boolea
           </NavLink>
         ))}
       </nav>
+      <div className="px-2 mb-2">
+        <button
+          onClick={handleLogout}
+          className="w-full px-3 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors text-left"
+        >
+          Logout
+        </button>
+      </div>
       <RunnerBadge online={runnerOnline} platform={runnerPlatform} />
     </aside>
   );
