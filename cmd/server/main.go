@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/user/gpoptimizer/server/auth"
+	"github.com/user/gpoptimizer/server/handler"
+	"github.com/user/gpoptimizer/server/relay"
 	"github.com/user/gpoptimizer/server/store"
 )
 
@@ -27,11 +27,10 @@ func main() {
 		addr = ":8080"
 	}
 
-	r := gin.Default()
-	auth.Routes(r, db, auth.ConfigFromEnv())
-	// remaining handlers added in Task 5+
+	r := relay.NewMemory()
+	router := handler.NewRouter(db, r, auth.ConfigFromEnv())
 
-	if err := r.Run(addr); err != nil {
+	if err := router.Run(addr); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }

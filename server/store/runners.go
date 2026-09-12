@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (db *DB) CreateRunner(ctx context.Context, userID uuid.UUID, tokenHash, platform, arch string) (Runner, error) {
@@ -42,6 +43,39 @@ func (db *DB) UpdateRunnerStatus(ctx context.Context, runnerID uuid.UUID, status
 		status, lastSeenAt, runnerID,
 	)
 	return err
+}
+
+// AuthenticateRunner finds the runner whose token hash matches token. Runner
+// tokens aren't looked up by ID (the runner has no other way to identify
+// itself over the wire), so this bcrypt-compares against every row.
+//
+// ponytail: O(n) over all runners per connect; fine at this scale, add a
+// token-prefix index if the runner table gets large.
+func (db *DB) AuthenticateRunner(ctx context.Context, token string) (Runner, error) {
+	rows, err := db.pool.QueryContext(ctx,
+		`SELECT id, user_id, token_hash, label, platform, arch, ffmpeg_version,
+                google_connected, last_seen_at, status, created_at
+         FROM runners`,
+	)
+	if err != nil {
+		return Runner{}, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r Runner
+		if err := rows.Scan(&r.ID, &r.UserID, &r.TokenHash, &r.Label, &r.Platform, &r.Arch, &r.FFmpegVersion,
+			&r.GoogleConnected, &r.LastSeenAt, &r.Status, &r.CreatedAt); err != nil {
+			return Runner{}, err
+		}
+		if bcrypt.CompareHashAndPassword([]byte(r.TokenHash), []byte(token)) == nil {
+			return r, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return Runner{}, err
+	}
+	return Runner{}, ErrNotFound
 }
 
 func (db *DB) UpdateRunnerTokenHash(ctx context.Context, runnerID uuid.UUID, tokenHash string) error {
