@@ -1,0 +1,32 @@
+# docker-compose.yml
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    environment:
+      POSTGRES_USER: gpopt
+      POSTGRES_PASSWORD: gpopt
+      POSTGRES_DB: gpoptimizer
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gpopt"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
