@@ -84,6 +84,13 @@ func HandleRunnerWebSocket(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		db.UpdateRunnerStatus(c.Request.Context(), runner.ID, "online", time.Now())
 		defer db.UpdateRunnerStatus(context.Background(), runner.ID, "offline", time.Now())
 
+		onlineMsg, _ := json.Marshal(map[string]interface{}{"type": "connected", "platform": runner.Platform})
+		r.SendToUI(userID, onlineMsg)
+		defer func() {
+			offMsg, _ := json.Marshal(map[string]string{"type": "runner_offline"})
+			r.SendToUI(userID, offMsg)
+		}()
+
 		cmdCh := r.Subscribe(userID, relay.ChanRunner)
 		defer r.Unsubscribe(userID, relay.ChanRunner)
 
