@@ -58,11 +58,11 @@ func HandleDownload(ctx context.Context, sendStatus func(protocol.Status), photo
 		resumeFrom = info.Size()
 	}
 
-	if err := photos.DownloadVideo(ctx, baseURL, destPath, resumeFrom); err != nil {
+	if err := photos.DownloadVideo(ctx, baseURL, destPath, resumeFrom, func(pct int) {
+		sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "downloading", Percent: pct})
+	}); err != nil {
 		sendStatus(protocol.Status{Type: "error", JobID: jobID, Message: fmt.Sprintf("download: %v", err)})
 		return "", err
 	}
-
-	sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "downloading", Percent: 100})
 	return destPath, nil
 }

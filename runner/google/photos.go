@@ -18,7 +18,7 @@ func NewPhotosClient(token *oauth2.Token, cfg *oauth2.Config) *PhotosClient {
 	return &PhotosClient{http: cfg.Client(context.Background(), token)}
 }
 
-func (c *PhotosClient) DownloadVideo(ctx context.Context, baseURL, destPath string, resumeFrom int64) error {
+func (c *PhotosClient) DownloadVideo(ctx context.Context, baseURL, destPath string, resumeFrom int64, onProgress func(pct int)) error {
 	dlURL := baseURL + "=dv"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
 	if err != nil {
@@ -48,6 +48,32 @@ func (c *PhotosClient) DownloadVideo(ctx context.Context, baseURL, destPath stri
 		return err
 	}
 	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-	return err
+
+	total := resp.ContentLength
+	var written int64
+	lastPct := -1
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, wErr := f.Write(buf[:n]); wErr != nil {
+				return wErr
+			}
+			written += int64(n)
+			if total > 0 && onProgress != nil {
+				pct := int(written * 100 / total)
+				if pct != lastPct {
+					lastPct = pct
+					onProgress(pct)
+				}
+			}
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			return readErr
+		}
+	}
+	return nil
 }
