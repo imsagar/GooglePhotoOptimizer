@@ -119,9 +119,13 @@ export function Jobs() {
     { key: "failed", label: "Failed" },
   ];
 
-  const handleClearFailed = async () => {
-    if (!confirm("Clear all failed jobs?")) return;
-    await api.del("/jobs?status=failed");
+  const handleClearStuck = async () => {
+    if (!confirm("Clear failed and stuck jobs?")) return;
+    await Promise.all([
+      api.del("/jobs?status=failed"),
+      api.del("/jobs?status=downloading"),
+      api.del("/jobs?status=encoding"),
+    ]);
     fetchJobs();
   };
 
@@ -134,10 +138,10 @@ export function Jobs() {
         <h1 className="text-2xl font-semibold text-text-primary">Jobs</h1>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleClearFailed}
+            onClick={handleClearStuck}
             className="bg-bg-secondary border border-border rounded-lg px-4 py-2 text-text-primary text-sm hover:bg-bg-hover"
           >
-            Clear Failed
+            Clear Stuck
           </button>
           {readyCount > 0 && (
             <button onClick={handleUploadAll} className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium">

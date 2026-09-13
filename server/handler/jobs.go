@@ -205,8 +205,9 @@ func HandleClearJobs(db *store.DB) gin.HandlerFunc {
 			return
 		}
 		status := c.Query("status")
-		if status != "failed" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "can only clear failed jobs"})
+		allowed := map[string]bool{"failed": true, "downloading": true, "encoding": true}
+		if !allowed[status] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "can only clear failed/stuck jobs"})
 			return
 		}
 		count, err := db.DeleteJobs(c.Request.Context(), userID, status)
