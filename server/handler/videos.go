@@ -73,3 +73,19 @@ func HandleListVideos(db *store.DB) gin.HandlerFunc {
 	}
 }
 
+func HandleClearVideos(db *store.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := auth.UserID(c)
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		count, err := db.DeleteAllVideos(c.Request.Context(), userID)
+		if err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": count})
+	}
+}
+

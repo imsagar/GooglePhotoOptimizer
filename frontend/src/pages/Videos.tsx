@@ -51,6 +51,13 @@ export function Videos() {
     }
   };
 
+  const handleClearVideos = async () => {
+    if (!confirm("Clear all videos from the list?")) return;
+    await api.del("/videos");
+    setSelected(new Set());
+    fetchVideos();
+  };
+
   const handleOptimize = async () => {
     await api.post("/jobs", {
       video_ids: Array.from(selected),
@@ -98,6 +105,14 @@ export function Videos() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-text-primary">Videos</h1>
         <div className="flex gap-3">
+          {videos.length > 0 && (
+            <button
+              onClick={handleClearVideos}
+              className="bg-bg-secondary border border-border hover:bg-bg-hover rounded-lg px-4 py-2 text-text-primary font-medium text-sm"
+            >
+              Clear All
+            </button>
+          )}
           <button
             disabled={picking}
             onClick={handlePickVideos}

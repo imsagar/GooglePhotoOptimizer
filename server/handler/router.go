@@ -25,6 +25,7 @@ func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 	api.POST("/runner/rotate", HandleRotate(db))
 
 	api.GET("/videos", HandleListVideos(db))
+	api.DELETE("/videos", HandleClearVideos(db))
 	api.POST("/photos/picker/start", HandlePickerStart(db, authCfg))
 	api.GET("/photos/picker/poll", HandlePickerPoll(db, authCfg))
 

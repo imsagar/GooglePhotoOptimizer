@@ -143,6 +143,14 @@ func (db *DB) ListVideos(ctx context.Context, userID uuid.UUID, params ListVideo
 	return videos, total, nil
 }
 
+func (db *DB) DeleteAllVideos(ctx context.Context, userID uuid.UUID) (int64, error) {
+	res, err := db.pool.ExecContext(ctx, "DELETE FROM videos WHERE user_id = $1", userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func (db *DB) GetVideoBaseURL(ctx context.Context, userID uuid.UUID, videoID string) (string, error) {
 	var baseURL string
 	err := db.pool.QueryRowContext(ctx,
