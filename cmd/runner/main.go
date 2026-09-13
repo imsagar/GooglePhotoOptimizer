@@ -8,7 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"golang.org/x/oauth2"
@@ -76,7 +78,25 @@ func main() {
 		jobs:       make(map[int]*jobState),
 	}
 
+	go startFileServer(cfg)
 	ws.Run(cfg, s.handleCommand)
+}
+
+func startFileServer(cfg *config.Config) {
+	base := pipeline.StorageBase(cfg)
+	mux := http.NewServeMux()
+	fs := http.FileServer(http.Dir(base))
+	mux.HandleFunc("/files/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == "OPTIONS" {
+			return
+		}
+		http.StripPrefix("/files/", fs).ServeHTTP(w, r)
+	})
+	log.Printf("runner: file server on :9090 serving %s", base)
+	if err := http.ListenAndServe(":9090", mux); err != nil {
+		log.Printf("runner: file server: %v", err)
+	}
 }
 
 // handleCommand dispatches one command from the server to the matching
@@ -186,6 +206,15 @@ func (s *runnerState) handleUpload(ctx context.Context, c *ws.Client, cmd protoc
 	if drive == nil {
 		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "not connected to Google Drive; connect via Settings in the web UI"})
 		return
+	}
+
+	// Derive paths from command if in-memory state was lost (runner restart)
+	if job == nil && cmd.VideoID != "" && cmd.RunDate != "" {
+		job = &jobState{
+			originalPath: filepath.Join(pipeline.StoragePath(s.cfg, "originals", cmd.RunDate), cmd.VideoID+".mp4"),
+			encodedPath:  filepath.Join(pipeline.StoragePath(s.cfg, "optimized", cmd.RunDate), cmd.VideoID+"_opt.mp4"),
+			filename:     cmd.VideoID,
+		}
 	}
 	if job == nil || job.encodedPath == "" {
 		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "no encoded file for this job"})

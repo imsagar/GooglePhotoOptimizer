@@ -16,7 +16,7 @@ import (
 // progress via sendStatus and a final job_complete status with the size
 // savings. Returns the local path of the encoded file.
 func HandleEncode(ctx context.Context, sendStatus func(protocol.Status), ffmpegPath string, cfg *config.Config, originalPath string, jobID int, opts ffmpeg.EncodeOpts, durationMs int) (string, error) {
-	dir := storagePath(cfg, "optimized")
+	dir := StoragePath(cfg, "optimized", "")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		sendStatus(protocol.Status{Type: "error", JobID: jobID, Message: fmt.Sprintf("encode: %v", err)})
 		return "", err

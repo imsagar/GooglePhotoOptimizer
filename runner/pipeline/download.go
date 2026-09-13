@@ -16,23 +16,35 @@ import (
 	"github.com/user/gpoptimizer/runner/google"
 )
 
-// storagePath returns cfg.StoragePath/<today>/<subdir>, defaulting to
-// ~/GooglePhotosOptimized when StoragePath is unset.
-func storagePath(cfg *config.Config, subdir string) string {
+// StoragePath returns cfg.StoragePath/<date>/<subdir>, defaulting to
+// ~/GooglePhotosOptimized when StoragePath is unset. Pass "" for date to use today.
+func StoragePath(cfg *config.Config, subdir, date string) string {
 	base := cfg.StoragePath
 	if base == "" {
 		home, _ := os.UserHomeDir()
 		base = filepath.Join(home, "GooglePhotosOptimized")
 	}
-	runDate := time.Now().Format("2006-01-02")
-	return filepath.Join(base, runDate, subdir)
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	return filepath.Join(base, date, subdir)
+}
+
+// StorageBase returns the root storage directory (no date/subdir).
+func StorageBase(cfg *config.Config) string {
+	base := cfg.StoragePath
+	if base == "" {
+		home, _ := os.UserHomeDir()
+		base = filepath.Join(home, "GooglePhotosOptimized")
+	}
+	return base
 }
 
 // HandleDownload downloads videoID's original file from Google Photos to
 // local storage, reporting progress via sendStatus. Returns the local path
 // the file was written to.
 func HandleDownload(ctx context.Context, sendStatus func(protocol.Status), photos *google.PhotosClient, cfg *config.Config, videoID string, jobID int, baseURL string) (string, error) {
-	dir := storagePath(cfg, "originals")
+	dir := StoragePath(cfg, "originals", "")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		sendStatus(protocol.Status{Type: "error", JobID: jobID, Message: fmt.Sprintf("download: %v", err)})
 		return "", err

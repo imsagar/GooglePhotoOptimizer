@@ -13,6 +13,7 @@ type Command struct {
 	Codec          string   `json:"codec,omitempty"`
 	CRF            int      `json:"crf,omitempty"`
 	Preset         string   `json:"preset,omitempty"`
+	RunDate        string   `json:"run_date,omitempty"`
 	DeleteOriginal bool     `json:"delete_original,omitempty"`
 	Targets        []string `json:"targets,omitempty"` // for delete_local
 	// google_credentials: server sends OAuth token + config to runner

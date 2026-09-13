@@ -228,7 +228,7 @@ func HandleUploadJob(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		_ = c.ShouldBindJSON(&req) // optional body; default delete_original=false overrides nothing if absent
 		deleteOriginal := req.DeleteOriginal || job.DeleteOriginal
 
-		cmd, err := json.Marshal(protocol.Command{Type: "upload", JobID: job.ID, DeleteOriginal: deleteOriginal})
+		cmd, err := json.Marshal(protocol.Command{Type: "upload", JobID: job.ID, VideoID: job.VideoID, RunDate: job.RunDate, DeleteOriginal: deleteOriginal})
 		if err != nil {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
@@ -257,7 +257,7 @@ func HandleBulkUpload(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		}
 
 		for _, j := range jobs {
-			cmd, err := json.Marshal(protocol.Command{Type: "upload", JobID: j.ID, DeleteOriginal: j.DeleteOriginal})
+			cmd, err := json.Marshal(protocol.Command{Type: "upload", JobID: j.ID, VideoID: j.VideoID, RunDate: j.RunDate, DeleteOriginal: j.DeleteOriginal})
 			if err != nil {
 				continue
 			}

@@ -27,6 +27,7 @@ export function Jobs() {
   const [filter, setFilter] = useState<Filter>("all");
   const [page, setPage] = useState(1);
   const [deleteOriginals, setDeleteOriginals] = useState<Record<number, boolean>>({});
+  const [previewJob, setPreviewJob] = useState<number | null>(null);
   const { lastEvent } = useWebSocket();
 
   const fetchJobs = () => {
@@ -181,9 +182,26 @@ export function Jobs() {
               <p className="text-sm text-status-failed mt-1">{job.error}</p>
             )}
 
+            {/* Video preview */}
+            {job.status === "ready" && previewJob === job.id && (
+              <div className="mt-3">
+                <video
+                  controls
+                  className="w-full max-h-[400px] rounded-lg bg-black"
+                  src={`http://localhost:9090/files/${job.run_date}/optimized/${job.video_id}_opt.mp4`}
+                />
+              </div>
+            )}
+
             {/* Actions */}
             {job.status === "ready" && (
               <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={() => setPreviewJob(previewJob === job.id ? null : job.id)}
+                  className="bg-bg-secondary border border-border rounded-lg px-4 py-2 text-text-primary text-sm hover:bg-bg-hover"
+                >
+                  {previewJob === job.id ? "Hide Preview" : "Preview"}
+                </button>
                 <button onClick={() => handleUpload(job)} className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium text-sm">
                   Upload to Google Photos
                 </button>
