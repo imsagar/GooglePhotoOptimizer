@@ -8,6 +8,7 @@ import "encoding/json"
 type Command struct {
 	Type           string   `json:"type"`
 	VideoID        string   `json:"video_id,omitempty"`
+	BaseURL        string   `json:"base_url,omitempty"`
 	JobID          int      `json:"job_id,omitempty"`
 	Codec          string   `json:"codec,omitempty"`
 	CRF            int      `json:"crf,omitempty"`

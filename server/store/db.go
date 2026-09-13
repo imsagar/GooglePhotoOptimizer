@@ -70,6 +70,7 @@ type Video struct {
 	CreationTime  *time.Time `json:"creation_time"`
 	AlbumID       string     `json:"album_id,omitempty"`
 	AlbumTitle    string     `json:"album_title,omitempty"`
+	BaseURL       string     `json:"base_url,omitempty"`
 	SyncedAt      time.Time  `json:"synced_at"`
 }
 

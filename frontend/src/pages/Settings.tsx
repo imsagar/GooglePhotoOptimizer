@@ -14,10 +14,17 @@ export function Settings() {
   const [pairingCode, setPairingCode] = useState("");
   const [settings, setSettings] = useState<OptSettings>({ codec: "libx265", crf: 28, preset: "medium" });
   const [saved, setSaved] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
 
   useEffect(() => {
     api.get<OptSettings>("/settings").then(setSettings).catch(() => {});
+    api.get<{ connected: boolean }>("/auth/google/photos/status").then((r) => setGoogleConnected(r.connected)).catch(() => {});
   }, []);
+
+  const handleDisconnect = async () => {
+    await api.post("/auth/google/photos/disconnect");
+    setGoogleConnected(false);
+  };
 
   const handlePair = async () => {
     const res = await api.post<{ code: string }>("/runner/pair");
@@ -71,12 +78,26 @@ export function Settings() {
       {/* Google Photos Connection */}
       <div className={cardClass}>
         <h2 className="text-lg font-semibold text-text-primary mb-4">Google Photos Connection</h2>
-        <p className="text-text-secondary text-sm mb-3">
-          Connect your Google Photos account to sync and optimize videos.
-        </p>
-        <a href="/api/auth/google/photos" className={btnClass + " inline-block text-center no-underline"}>
-          Connect Google Photos
-        </a>
+        {googleConnected ? (
+          <>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+              <span className="text-green-400 text-sm font-medium">Connected</span>
+            </div>
+            <button onClick={handleDisconnect} className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition-colors">
+              Disconnect Google Photos
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-text-secondary text-sm mb-3">
+              Connect your Google Photos account to sync and optimize videos.
+            </p>
+            <a href="/api/auth/google/photos" className={btnClass + " inline-block text-center no-underline"}>
+              Connect Google Photos
+            </a>
+          </>
+        )}
       </div>
 
       {/* Optimization Defaults */}

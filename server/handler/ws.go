@@ -65,6 +65,18 @@ func HandleRunnerWebSocket(db *store.DB, r relay.Relay, authCfg auth.Config) gin
 		}
 		defer conn.Close()
 
+		const (
+			pingInterval = 30 * time.Second
+			pongWait     = 45 * time.Second
+			writeWait    = 10 * time.Second
+		)
+
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(pongWait))
+			return nil
+		})
+
 		// First message is {"type":"auth","token":"..."}, sent unencrypted
 		// since the runner doesn't have the derived key yet.
 		_, authMsg, err := conn.ReadMessage()
@@ -139,6 +151,9 @@ func HandleRunnerWebSocket(db *store.DB, r relay.Relay, authCfg auth.Config) gin
 			}
 		}()
 
+		ticker := time.NewTicker(pingInterval)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case cmd, ok := <-cmdCh:
@@ -150,7 +165,13 @@ func HandleRunnerWebSocket(db *store.DB, r relay.Relay, authCfg auth.Config) gin
 					log.Printf("runner ws: encrypt error: %v", err)
 					continue
 				}
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
 				if err := conn.WriteMessage(websocket.TextMessage, []byte(encrypted)); err != nil {
+					return
+				}
+			case <-ticker.C:
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}
 			case <-done:
@@ -174,7 +195,7 @@ func handleRunnerStatus(ctx context.Context, db *store.DB, r relay.Relay, userID
 		if s.OriginalSize > 0 {
 			savingsPct = (1 - float32(s.OptimizedSize)/float32(s.OriginalSize)) * 100
 		}
-		if err := db.UpdateJobResult(ctx, s.JobID, userID, s.OptimizedSize, savingsPct); err != nil {
+		if err := db.UpdateJobResult(ctx, s.JobID, userID, s.OriginalSize, s.OptimizedSize, savingsPct); err != nil {
 			log.Printf("runner ws: update job result: %v", err)
 		}
 		if err := db.UpdateJobStatus(ctx, s.JobID, userID, "ready", 100); err != nil {
@@ -185,12 +206,38 @@ func handleRunnerStatus(ctx context.Context, db *store.DB, r relay.Relay, userID
 			log.Printf("runner ws: update job status: %v", err)
 		}
 	case "error":
-		if err := db.UpdateJobStatus(ctx, s.JobID, userID, "failed", 0); err != nil {
-			log.Printf("runner ws: update job status: %v", err)
+		if err := db.UpdateJobError(ctx, s.JobID, userID, s.Message); err != nil {
+			log.Printf("runner ws: update job error: %v", err)
 		}
 	case "videos_synced":
-		// Video upsert (parsing s.Videos into store.Video rows) lands in
-		// Task 6 alongside the REST handlers that need the same shape.
+		var metas []struct {
+			ID           string `json:"id"`
+			Filename     string `json:"filename"`
+			MimeType     string `json:"mimeType"`
+			Width        int    `json:"width"`
+			Height       int    `json:"height"`
+			CreationTime string `json:"creationTime"`
+		}
+		if err := json.Unmarshal(s.Videos, &metas); err != nil {
+			log.Printf("runner ws: parse videos_synced: %v", err)
+			break
+		}
+		videos := make([]store.Video, len(metas))
+		for i, m := range metas {
+			videos[i] = store.Video{
+				ID:       m.ID,
+				Filename: m.Filename,
+				MimeType: m.MimeType,
+				Width:    m.Width,
+				Height:   m.Height,
+			}
+			if t, err := time.Parse(time.RFC3339, m.CreationTime); err == nil {
+				videos[i].CreationTime = &t
+			}
+		}
+		if err := db.UpsertVideos(ctx, userID, videos); err != nil {
+			log.Printf("runner ws: upsert videos: %v", err)
+		}
 	case "google_auth_status":
 		if err := db.SetGoogleConnected(ctx, runnerID, s.Connected); err != nil {
 			log.Printf("runner ws: set google connected: %v", err)

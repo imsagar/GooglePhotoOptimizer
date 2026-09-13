@@ -13,7 +13,7 @@ import (
 func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 	router := gin.Default()
 
-	auth.Routes(router, db, authCfg)
+	auth.Routes(router, db, authCfg, r)
 
 	// Runner registration is public: the runner has no session yet, only a
 	// pairing code obtained by the (already-authenticated) UI.
@@ -25,7 +25,8 @@ func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 	api.POST("/runner/rotate", HandleRotate(db))
 
 	api.GET("/videos", HandleListVideos(db))
-	api.POST("/videos/sync", HandleSyncVideos(r))
+	api.POST("/photos/picker/start", HandlePickerStart(db, authCfg))
+	api.GET("/photos/picker/poll", HandlePickerPoll(db, authCfg))
 
 	api.POST("/jobs", HandleCreateJobs(db, r))
 	api.GET("/jobs", HandleListJobs(db))

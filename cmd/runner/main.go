@@ -42,7 +42,6 @@ type runnerState struct {
 	mu     sync.Mutex
 	photos *google.PhotosClient
 	drive  *google.DriveClient
-	videos map[string]google.VideoMeta
 	jobs   map[int]*jobState
 }
 
@@ -74,7 +73,6 @@ func main() {
 	s := &runnerState{
 		cfg:        cfg,
 		ffmpegPath: ffmpegPath,
-		videos:     make(map[string]google.VideoMeta),
 		jobs:       make(map[int]*jobState),
 	}
 
@@ -95,8 +93,6 @@ func (s *runnerState) handleCommand(c *ws.Client, cmd protocol.Command) {
 		s.handleEncode(ctx, c, cmd)
 	case "upload":
 		s.handleUpload(ctx, c, cmd)
-	case "sync_videos":
-		s.handleSyncVideos(ctx, c)
 	case "delete_local":
 		s.handleDeleteLocal(c, cmd)
 	default:
@@ -135,7 +131,6 @@ func (s *runnerState) handleGoogleCredentials(c *ws.Client, cmd protocol.Command
 
 func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd protocol.Command) {
 	s.mu.Lock()
-	meta, ok := s.videos[cmd.VideoID]
 	photos := s.photos
 	s.mu.Unlock()
 
@@ -143,19 +138,22 @@ func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd prot
 		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "not connected to Google Photos; connect via Settings in the web UI"})
 		return
 	}
-	if !ok {
-		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "unknown video_id: run sync_videos first"})
+	if cmd.BaseURL == "" {
+		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "no base_url in download command"})
 		return
 	}
 
-	path, err := pipeline.HandleDownload(ctx, c.SendStatus, photos, s.cfg, cmd.VideoID, cmd.JobID, meta.BaseURL)
+	path, err := pipeline.HandleDownload(ctx, c.SendStatus, photos, s.cfg, cmd.VideoID, cmd.JobID, cmd.BaseURL)
 	if err != nil {
 		return
 	}
 
 	s.mu.Lock()
-	s.jobs[cmd.JobID] = &jobState{originalPath: path, filename: meta.Filename}
+	s.jobs[cmd.JobID] = &jobState{originalPath: path, filename: cmd.VideoID}
 	s.mu.Unlock()
+
+	// Auto-chain into encode
+	s.handleEncode(ctx, c, cmd)
 }
 
 func (s *runnerState) handleEncode(ctx context.Context, c *ws.Client, cmd protocol.Command) {
@@ -207,37 +205,6 @@ func (s *runnerState) handleUpload(ctx context.Context, c *ws.Client, cmd protoc
 	s.mu.Lock()
 	delete(s.jobs, cmd.JobID)
 	s.mu.Unlock()
-}
-
-func (s *runnerState) handleSyncVideos(ctx context.Context, c *ws.Client) {
-	s.mu.Lock()
-	photos := s.photos
-	s.mu.Unlock()
-	if photos == nil {
-		c.SendStatus(protocol.Status{Type: "error", Message: "not connected to Google Photos; connect via Settings in the web UI"})
-		return
-	}
-
-	videos, err := photos.ListVideos(ctx)
-	if err != nil {
-		c.SendStatus(protocol.Status{Type: "error", Message: fmt.Sprintf("sync_videos: %v", err)})
-		return
-	}
-
-	byID := make(map[string]google.VideoMeta, len(videos))
-	for _, v := range videos {
-		byID[v.ID] = v
-	}
-	s.mu.Lock()
-	s.videos = byID
-	s.mu.Unlock()
-
-	data, err := json.Marshal(videos)
-	if err != nil {
-		c.SendStatus(protocol.Status{Type: "error", Message: fmt.Sprintf("sync_videos: %v", err)})
-		return
-	}
-	c.SendStatus(protocol.Status{Type: "videos_synced", Count: len(videos), Videos: data})
 }
 
 func (s *runnerState) handleDeleteLocal(c *ws.Client, cmd protocol.Command) {

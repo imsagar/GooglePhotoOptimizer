@@ -12,6 +12,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error("unauthorized");
   }
   if (!res.ok) throw new Error(await res.text());
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 

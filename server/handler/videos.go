@@ -1,16 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/user/gpoptimizer/internal/protocol"
 	"github.com/user/gpoptimizer/server/auth"
-	"github.com/user/gpoptimizer/server/relay"
 	"github.com/user/gpoptimizer/server/store"
 )
 
@@ -76,23 +73,3 @@ func HandleListVideos(db *store.DB) gin.HandlerFunc {
 	}
 }
 
-// HandleSyncVideos asks the user's runner to re-scan Google Photos and push
-// updated video metadata back over /ws/runner (handled as a "videos_synced"
-// status in ws.go). Fire-and-forget: the request just queues the command.
-func HandleSyncVideos(r relay.Relay) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userID, err := auth.UserID(c)
-		if err != nil {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-
-		cmd, err := json.Marshal(protocol.Command{Type: "sync_videos"})
-		if err != nil {
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
-		r.SendToRunner(userID, cmd)
-		c.JSON(http.StatusAccepted, gin.H{"status": "requested"})
-	}
-}

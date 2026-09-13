@@ -84,6 +84,12 @@ func (c *Client) connect() error {
 	c.mu.Unlock()
 	defer conn.Close()
 
+	conn.SetReadDeadline(time.Now().Add(45 * time.Second))
+	conn.SetPingHandler(func(appData string) error {
+		conn.SetReadDeadline(time.Now().Add(45 * time.Second))
+		return conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
+	})
+
 	// Auth is the one unencrypted message: the runner has no key until the
 	// server confirms this token (see HandleRunnerWebSocket).
 	authMsg, _ := json.Marshal(map[string]string{

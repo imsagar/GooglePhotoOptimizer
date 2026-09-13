@@ -78,6 +78,20 @@ export function Jobs() {
             : j
         )
       );
+    } else if (event.type === "error") {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === event.job_id
+            ? { ...j, status: "failed" as Job["status"], progress: 0, error: (event.message as string) ?? "" }
+            : j
+        )
+      );
+    } else if (event.type === "upload_complete") {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === event.job_id ? { ...j, status: "uploaded" as Job["status"], progress: 100 } : j
+        )
+      );
     }
   }, [lastEvent]);
 
@@ -157,7 +171,7 @@ export function Jobs() {
               <div className="flex items-center gap-4 text-sm text-text-secondary">
                 <span>{formatSize(job.original_size)} → {formatSize(job.optimized_size)}</span>
                 <span className="text-accent font-medium">
-                  {job.savings_pct > 0 ? `${job.savings_pct}% saved` : `${Math.round((1 - job.optimized_size / job.original_size) * 100)}% saved`}
+                  {job.savings_pct > 0 ? `${Math.round(job.savings_pct)}% saved` : `${Math.round((1 - job.optimized_size / job.original_size) * 100)}% saved`}
                 </span>
               </div>
             )}

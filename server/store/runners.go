@@ -27,7 +27,9 @@ func (db *DB) GetRunnerByUserID(ctx context.Context, userID uuid.UUID) (Runner, 
 	err := db.pool.QueryRowContext(ctx,
 		`SELECT id, user_id, token_hash, COALESCE(label,''), platform, arch, COALESCE(ffmpeg_version,''),
                 google_connected, last_seen_at, status, created_at
-         FROM runners WHERE user_id = $1`,
+         FROM runners WHERE user_id = $1
+         ORDER BY CASE WHEN status = 'online' THEN 0 ELSE 1 END, last_seen_at DESC NULLS LAST
+         LIMIT 1`,
 		userID,
 	).Scan(&r.ID, &r.UserID, &r.TokenHash, &r.Label, &r.Platform, &r.Arch, &r.FFmpegVersion,
 		&r.GoogleConnected, &r.LastSeenAt, &r.Status, &r.CreatedAt)

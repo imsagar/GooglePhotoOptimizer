@@ -42,11 +42,12 @@ func (m *Memory) Unsubscribe(userID uuid.UUID, channel string) {
 func (m *Memory) send(userID uuid.UUID, channel string, msg []byte) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	ch, ok := m.subs[key(userID, channel)]
+	k := key(userID, channel)
+	ch, ok := m.subs[k]
 	if ok {
 		select {
 		case ch <- msg:
-		default: // drop if buffer full
+		default:
 		}
 	}
 }

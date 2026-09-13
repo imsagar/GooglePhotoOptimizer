@@ -56,10 +56,15 @@ type rowScanner interface {
 func scanJob(s rowScanner) (Job, error) {
 	var j Job
 	var errStr sql.NullString
-	err := s.Scan(&j.ID, &j.UserID, &j.VideoID, &j.Status, &j.RunDate, &j.OriginalSize, &j.OptimizedSize,
-		&j.SavingsPct, &j.Codec, &j.CRF, &j.Preset, &errStr, &j.Progress, &j.DeleteOriginal, &j.SizeVerified,
+	var origSize, optSize sql.NullInt64
+	var savPct sql.NullFloat64
+	err := s.Scan(&j.ID, &j.UserID, &j.VideoID, &j.Status, &j.RunDate, &origSize, &optSize,
+		&savPct, &j.Codec, &j.CRF, &j.Preset, &errStr, &j.Progress, &j.DeleteOriginal, &j.SizeVerified,
 		&j.DurationVerified, &j.CreatedAt, &j.UpdatedAt)
 	j.Error = errStr.String
+	j.OriginalSize = origSize.Int64
+	j.OptimizedSize = optSize.Int64
+	j.SavingsPct = float32(savPct.Float64)
 	return j, err
 }
 
@@ -102,12 +107,17 @@ func (db *DB) ListJobs(ctx context.Context, userID uuid.UUID, params ListJobsPar
 	for rows.Next() {
 		var j Job
 		var errStr sql.NullString
-		if err := rows.Scan(&j.ID, &j.UserID, &j.VideoID, &j.Status, &j.RunDate, &j.OriginalSize, &j.OptimizedSize,
-			&j.SavingsPct, &j.Codec, &j.CRF, &j.Preset, &errStr, &j.Progress, &j.DeleteOriginal, &j.SizeVerified,
+		var origSize, optSize sql.NullInt64
+		var savPct sql.NullFloat64
+		if err := rows.Scan(&j.ID, &j.UserID, &j.VideoID, &j.Status, &j.RunDate, &origSize, &optSize,
+			&savPct, &j.Codec, &j.CRF, &j.Preset, &errStr, &j.Progress, &j.DeleteOriginal, &j.SizeVerified,
 			&j.DurationVerified, &j.CreatedAt, &j.UpdatedAt, &total); err != nil {
 			return nil, 0, err
 		}
 		j.Error = errStr.String
+		j.OriginalSize = origSize.Int64
+		j.OptimizedSize = optSize.Int64
+		j.SavingsPct = float32(savPct.Float64)
 		jobs = append(jobs, j)
 	}
 	return jobs, total, rows.Err()
@@ -136,10 +146,18 @@ func (db *DB) UpdateJobStatus(ctx context.Context, jobID int, userID uuid.UUID, 
 	return err
 }
 
-func (db *DB) UpdateJobResult(ctx context.Context, jobID int, userID uuid.UUID, optimizedSize int64, savingsPct float32) error {
+func (db *DB) UpdateJobError(ctx context.Context, jobID int, userID uuid.UUID, message string) error {
 	_, err := db.pool.ExecContext(ctx,
-		`UPDATE jobs SET optimized_size = $1, savings_pct = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
-		optimizedSize, savingsPct, jobID, userID,
+		`UPDATE jobs SET status = 'failed', progress = 0, error = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+		message, jobID, userID,
+	)
+	return err
+}
+
+func (db *DB) UpdateJobResult(ctx context.Context, jobID int, userID uuid.UUID, originalSize, optimizedSize int64, savingsPct float32) error {
+	_, err := db.pool.ExecContext(ctx,
+		`UPDATE jobs SET original_size = $1, optimized_size = $2, savings_pct = $3, updated_at = NOW() WHERE id = $4 AND user_id = $5`,
+		originalSize, optimizedSize, savingsPct, jobID, userID,
 	)
 	return err
 }

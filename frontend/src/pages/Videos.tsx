@@ -32,6 +32,7 @@ export function Videos() {
   const [minSize, setMinSize] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [picking, setPicking] = useState(false);
 
   const fetchVideos = () => {
     const params = new URLSearchParams();
@@ -50,6 +51,29 @@ export function Videos() {
   };
 
   useEffect(fetchVideos, [page, sort, order, minSize, dateFrom, dateTo]);
+
+  const handlePickVideos = async () => {
+    setPicking(true);
+    try {
+      const { session_id, picker_url } = await api.post<{ session_id: string; picker_url: string }>("/photos/picker/start");
+      window.open(picker_url, "gpoptimizer_picker", "width=800,height=600");
+
+      const poll = async (): Promise<void> => {
+        const { ready } = await api.get<{ ready: boolean }>(`/photos/picker/poll?session_id=${session_id}`);
+        if (ready) {
+          fetchVideos();
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+        return poll();
+      };
+      await poll();
+    } catch {
+      // ignore
+    } finally {
+      setPicking(false);
+    }
+  };
 
   const handleOptimize = async () => {
     await api.post("/jobs", {
@@ -99,13 +123,22 @@ export function Videos() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-text-primary">Videos</h1>
-        <button
-          disabled={selected.size === 0}
-          onClick={handleOptimize}
-          className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Optimize Selected ({selected.size})
-        </button>
+        <div className="flex gap-3">
+          <button
+            disabled={picking}
+            onClick={handlePickVideos}
+            className="bg-bg-secondary border border-border hover:bg-bg-hover rounded-lg px-4 py-2 text-text-primary font-medium disabled:opacity-40"
+          >
+            {picking ? "Picking…" : "Pick Videos from Google Photos"}
+          </button>
+          <button
+            disabled={selected.size === 0}
+            onClick={handleOptimize}
+            className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Optimize Selected ({selected.size})
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -187,9 +220,9 @@ export function Videos() {
                     <div className="w-8 h-8 rounded bg-bg-secondary flex items-center justify-center text-text-muted text-xs">▶</div>
                   </td>
                   <td className="p-3 text-text-primary truncate max-w-[200px]">{v.filename}</td>
-                  <td className="p-3 text-right text-text-secondary">{formatSize(v.size_bytes)}</td>
-                  <td className="p-3 text-right text-text-secondary">{formatDuration(v.duration_ms)}</td>
-                  <td className="p-3 text-text-secondary">{v.width}×{v.height}</td>
+                  <td className="p-3 text-right text-text-secondary">{v.size_bytes ? formatSize(v.size_bytes) : "—"}</td>
+                  <td className="p-3 text-right text-text-secondary">{v.duration_ms ? formatDuration(v.duration_ms) : "—"}</td>
+                  <td className="p-3 text-text-secondary">{v.width && v.height ? `${v.width}×${v.height}` : "—"}</td>
                   <td className="p-3 text-text-secondary">{v.album_title ?? "—"}</td>
                   <td className="p-3 text-text-secondary">{v.creation_time ? new Date(v.creation_time).toLocaleDateString() : "—"}</td>
                   <td className="p-3">{v.status ? <StatusBadge status={v.status} /> : <span className="text-text-muted text-xs">—</span>}</td>

@@ -20,7 +20,7 @@ import (
 )
 
 var Scopes = []string{
-	"https://www.googleapis.com/auth/photoslibrary.readonly",
+	"https://www.googleapis.com/auth/photospicker.mediaitems.readonly",
 	"https://www.googleapis.com/auth/drive.file",
 }
 

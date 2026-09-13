@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -54,14 +55,17 @@ func HandleCreateJobs(db *store.DB, r relay.Relay) gin.HandlerFunc {
 
 		jobs, err := db.CreateJobs(c.Request.Context(), userID, params)
 		if err != nil {
+			log.Printf("jobs: create failed: %v", err)
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 
 		for _, j := range jobs {
+			baseURL, _ := db.GetVideoBaseURL(c.Request.Context(), userID, j.VideoID)
 			cmd, err := json.Marshal(protocol.Command{
 				Type:    "download",
 				VideoID: j.VideoID,
+				BaseURL: baseURL,
 				JobID:   j.ID,
 				Codec:   j.Codec,
 				CRF:     j.CRF,

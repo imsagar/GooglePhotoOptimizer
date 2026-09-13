@@ -39,6 +39,20 @@ func (db *DB) GetGoogleToken(ctx context.Context, userID uuid.UUID) (string, err
 	return tok.String, nil
 }
 
+func (db *DB) DeleteGoogleToken(ctx context.Context, userID uuid.UUID) error {
+	_, err := db.pool.ExecContext(ctx,
+		`UPDATE users SET google_token = NULL WHERE id = $1`, userID,
+	)
+	return err
+}
+
+func (db *DB) SavePickerSession(ctx context.Context, userID uuid.UUID, sessionID string) error {
+	_, err := db.pool.ExecContext(ctx,
+		`UPDATE users SET picker_session_id = $1 WHERE id = $2`, sessionID, userID,
+	)
+	return err
+}
+
 func (db *DB) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	var u User
 	err := db.pool.QueryRowContext(ctx,

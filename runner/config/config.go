@@ -33,6 +33,10 @@ func Load() (*Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
+	if len(cfg.StoragePath) > 1 && cfg.StoragePath[:2] == "~/" {
+		home, _ := os.UserHomeDir()
+		cfg.StoragePath = filepath.Join(home, cfg.StoragePath[2:])
+	}
 	return &cfg, nil
 }
 

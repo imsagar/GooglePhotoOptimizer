@@ -14,6 +14,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
+	"github.com/user/gpoptimizer/internal/protocol"
+	"github.com/user/gpoptimizer/server/relay"
 	"github.com/user/gpoptimizer/server/store"
 )
 
@@ -83,21 +85,23 @@ type googleUserInfo struct {
 //	POST /api/auth/logout          clear session
 //	GET  /api/auth/me              current user as JSON
 var photosScopes = []string{
-	"https://www.googleapis.com/auth/photoslibrary.readonly",
+	"https://www.googleapis.com/auth/photospicker.mediaitems.readonly",
 	"https://www.googleapis.com/auth/drive.file",
 }
 
-func Routes(r *gin.Engine, db *store.DB, cfg Config) {
+func Routes(r *gin.Engine, db *store.DB, cfg Config, rl relay.Relay) {
 	oauthCfg := oauthConfig(cfg)
 	sessionStore := newSessionStore(cfg)
 	sharedSessionStore = sessionStore
 
 	g := r.Group("/api/auth")
 	g.GET("/google", handleGoogleLogin(oauthCfg, sessionStore))
-	g.GET("/google/callback", handleCallback(db, oauthCfg, sessionStore))
+	g.GET("/google/callback", handleCallback(db, oauthCfg, sessionStore, cfg, rl))
 	g.POST("/logout", handleLogout(sessionStore))
 	g.GET("/me", Middleware(), handleMe(sessionStore))
 	g.GET("/google/photos", Middleware(), handleGooglePhotosLogin(cfg, sessionStore))
+	g.GET("/google/photos/status", Middleware(), handleGooglePhotosStatus(db))
+	g.POST("/google/photos/disconnect", Middleware(), handleGooglePhotosDisconnect(db))
 }
 
 func handleGoogleLogin(oauthCfg *oauth2.Config, sessionStore *sessions.CookieStore) gin.HandlerFunc {
@@ -134,7 +138,7 @@ func handleGooglePhotosLogin(cfg Config, sessionStore *sessions.CookieStore) gin
 	}
 }
 
-func handleCallback(db *store.DB, oauthCfg *oauth2.Config, sessionStore *sessions.CookieStore) gin.HandlerFunc {
+func handleCallback(db *store.DB, oauthCfg *oauth2.Config, sessionStore *sessions.CookieStore, cfg Config, rl relay.Relay) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sess, _ := sessionStore.Get(c.Request, sessionName)
 		wantState, _ := sess.Values["oauth_state"].(string)
@@ -172,6 +176,13 @@ func handleCallback(db *store.DB, oauthCfg *oauth2.Config, sessionStore *session
 				c.AbortWithStatus(http.StatusInternalServerError)
 				return
 			}
+			credCmd, _ := json.Marshal(protocol.Command{
+				Type:         "google_credentials",
+				ClientID:     cfg.ClientID,
+				ClientSecret: cfg.ClientSecret,
+				TokenJSON:    string(tokenJSON),
+			})
+			rl.SendToRunner(userID, credCmd)
 			delete(sess.Values, "oauth_state")
 			_ = sess.Save(c.Request, c.Writer)
 			c.Redirect(http.StatusFound, "/settings")
@@ -244,6 +255,25 @@ func handleMe(sessionStore *sessions.CookieStore) gin.HandlerFunc {
 		name, _ := sess.Values["name"].(string)
 		picture, _ := sess.Values["picture"].(string)
 		c.JSON(http.StatusOK, meUser{ID: userID, Email: email, Name: name, Picture: picture})
+	}
+}
+
+func handleGooglePhotosStatus(db *store.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.MustGet("userID").(uuid.UUID)
+		tok, _ := db.GetGoogleToken(c.Request.Context(), userID)
+		c.JSON(http.StatusOK, gin.H{"connected": tok != ""})
+	}
+}
+
+func handleGooglePhotosDisconnect(db *store.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.MustGet("userID").(uuid.UUID)
+		if err := db.DeleteGoogleToken(c.Request.Context(), userID); err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.Status(http.StatusNoContent)
 	}
 }
 

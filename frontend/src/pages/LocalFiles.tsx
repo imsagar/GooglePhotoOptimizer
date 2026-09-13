@@ -25,7 +25,9 @@ export function LocalFiles() {
   const [confirming, setConfirming] = useState(false);
 
   const fetchFiles = () => {
-    api.get<LocalFile[]>("/cleanup/local-files").then(setFiles).catch(() => {});
+    api.get<LocalFile[]>("/cleanup/local-files")
+      .then((r) => { if (Array.isArray(r)) setFiles(r); })
+      .catch(() => {});
   };
 
   useEffect(fetchFiles, []);
