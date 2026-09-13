@@ -94,6 +94,8 @@ export function Videos() {
     }
   };
 
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
+
   const allSelected = videos.length > 0 && videos.every((v) => selected.has(v.id));
   const start = (page - 1) * PAGE_SIZE + 1;
   const end = Math.min(page * PAGE_SIZE, total);
@@ -148,23 +150,46 @@ export function Videos() {
               selected.has(v.id) ? "border-accent ring-2 ring-accent/30" : "border-border hover:border-text-muted"
             }`}
           >
-            {/* Thumbnail */}
+            {/* Thumbnail / Player */}
             <div className="aspect-video bg-bg-secondary relative">
-              {v.base_url ? (
-                <img
-                  src={`${v.base_url}=w320-h180-c`}
-                  alt={v.filename}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-                  }}
+              {playingVideo === v.id && v.base_url ? (
+                <video
+                  autoPlay
+                  controls
+                  className="w-full h-full object-contain bg-black"
+                  src={`${v.base_url}=dv`}
+                  onClick={(e) => e.stopPropagation()}
                 />
-              ) : null}
-              <div className={`absolute inset-0 flex items-center justify-center text-text-muted text-3xl ${v.base_url ? "hidden" : ""}`}>
-                ▶
-              </div>
+              ) : (
+                <>
+                  {v.base_url ? (
+                    <img
+                      src={`${v.base_url}=w320-h180-c`}
+                      alt={v.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                      }}
+                    />
+                  ) : null}
+                  <button
+                    className={`absolute inset-0 flex items-center justify-center ${v.base_url ? "hidden" : ""}`}
+                    onClick={(e) => { e.stopPropagation(); if (v.base_url) setPlayingVideo(v.id); }}
+                  >
+                    <span className="text-text-muted text-3xl">▶</span>
+                  </button>
+                  {v.base_url && (
+                    <button
+                      className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity"
+                      onClick={(e) => { e.stopPropagation(); setPlayingVideo(v.id); }}
+                    >
+                      <span className="text-white text-4xl drop-shadow-lg">▶</span>
+                    </button>
+                  )}
+                </>
+              )}
             </div>
             {/* Checkbox overlay */}
             <div className="absolute top-2 left-2">
