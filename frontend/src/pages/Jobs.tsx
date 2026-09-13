@@ -119,14 +119,9 @@ export function Jobs() {
     { key: "failed", label: "Failed" },
   ];
 
-  const [showClearMenu, setShowClearMenu] = useState(false);
-
-  const handleClear = async (status?: string) => {
-    const label = status || "all";
-    if (!confirm(`Clear ${label} jobs?`)) return;
-    const qs = status ? `?status=${status}` : "";
-    await api.del(`/jobs${qs}`);
-    setShowClearMenu(false);
+  const handleClearFailed = async () => {
+    if (!confirm("Clear all failed jobs?")) return;
+    await api.del("/jobs?status=failed");
     fetchJobs();
   };
 
@@ -138,21 +133,12 @@ export function Jobs() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-text-primary">Jobs</h1>
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <button
-              onClick={() => setShowClearMenu(!showClearMenu)}
-              className="bg-bg-secondary border border-border rounded-lg px-4 py-2 text-text-primary text-sm hover:bg-bg-hover"
-            >
-              Clear...
-            </button>
-            {showClearMenu && (
-              <div className="absolute right-0 mt-1 bg-bg-card border border-border rounded-lg shadow-lg py-1 z-10 min-w-[160px]">
-                <button onClick={() => handleClear("failed")} className="w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-bg-hover">Clear Failed</button>
-                <button onClick={() => handleClear("uploaded")} className="w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-bg-hover">Clear Uploaded</button>
-                <button onClick={() => handleClear()} className="w-full text-left px-4 py-2 text-sm text-status-failed hover:bg-bg-hover">Clear All</button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleClearFailed}
+            className="bg-bg-secondary border border-border rounded-lg px-4 py-2 text-text-primary text-sm hover:bg-bg-hover"
+          >
+            Clear Failed
+          </button>
           {readyCount > 0 && (
             <button onClick={handleUploadAll} className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium">
               Upload All Ready ({readyCount})
