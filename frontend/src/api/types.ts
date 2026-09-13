@@ -16,6 +16,7 @@ export interface Video {
   creation_time: string;
   album_id?: string;
   album_title?: string;
+  base_url?: string;
 }
 
 export interface Job {
