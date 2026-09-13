@@ -212,7 +212,7 @@ func (s *runnerState) handleUpload(ctx context.Context, c *ws.Client, cmd protoc
 	if job == nil && cmd.VideoID != "" && cmd.RunDate != "" {
 		job = &jobState{
 			originalPath: filepath.Join(pipeline.StoragePath(s.cfg, "originals", cmd.RunDate), cmd.VideoID+".mp4"),
-			encodedPath:  filepath.Join(pipeline.StoragePath(s.cfg, "optimized", cmd.RunDate), cmd.VideoID+"_opt.mp4"),
+			encodedPath:  filepath.Join(pipeline.StoragePath(s.cfg, "optimized", cmd.RunDate), cmd.VideoID+"-o.mp4"),
 			filename:     cmd.VideoID,
 		}
 	}

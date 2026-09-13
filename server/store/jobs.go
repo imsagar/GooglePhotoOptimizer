@@ -154,6 +154,20 @@ func (db *DB) UpdateJobError(ctx context.Context, jobID int, userID uuid.UUID, m
 	return err
 }
 
+func (db *DB) DeleteJobs(ctx context.Context, userID uuid.UUID, status string) (int64, error) {
+	where := "user_id = $1"
+	args := []interface{}{userID}
+	if status != "" {
+		where += " AND status = $2"
+		args = append(args, status)
+	}
+	res, err := db.pool.ExecContext(ctx, "DELETE FROM jobs WHERE "+where, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func (db *DB) UpdateJobResult(ctx context.Context, jobID int, userID uuid.UUID, originalSize, optimizedSize int64, savingsPct float32) error {
 	_, err := db.pool.ExecContext(ctx,
 		`UPDATE jobs SET original_size = $1, optimized_size = $2, savings_pct = $3, updated_at = NOW() WHERE id = $4 AND user_id = $5`,

@@ -119,6 +119,17 @@ export function Jobs() {
     { key: "failed", label: "Failed" },
   ];
 
+  const [showClearMenu, setShowClearMenu] = useState(false);
+
+  const handleClear = async (status?: string) => {
+    const label = status || "all";
+    if (!confirm(`Clear ${label} jobs?`)) return;
+    const qs = status ? `?status=${status}` : "";
+    await api.del(`/jobs${qs}`);
+    setShowClearMenu(false);
+    fetchJobs();
+  };
+
   const readyCount = jobs.filter((j) => j.status === "ready").length;
   const totalPages = Math.ceil(total / 20);
 
@@ -126,11 +137,28 @@ export function Jobs() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-text-primary">Jobs</h1>
-        {readyCount > 0 && (
-          <button onClick={handleUploadAll} className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium">
-            Upload All Ready ({readyCount})
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowClearMenu(!showClearMenu)}
+              className="bg-bg-secondary border border-border rounded-lg px-4 py-2 text-text-primary text-sm hover:bg-bg-hover"
+            >
+              Clear...
+            </button>
+            {showClearMenu && (
+              <div className="absolute right-0 mt-1 bg-bg-card border border-border rounded-lg shadow-lg py-1 z-10 min-w-[160px]">
+                <button onClick={() => handleClear("failed")} className="w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-bg-hover">Clear Failed</button>
+                <button onClick={() => handleClear("uploaded")} className="w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-bg-hover">Clear Uploaded</button>
+                <button onClick={() => handleClear()} className="w-full text-left px-4 py-2 text-sm text-status-failed hover:bg-bg-hover">Clear All</button>
+              </div>
+            )}
+          </div>
+          {readyCount > 0 && (
+            <button onClick={handleUploadAll} className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium">
+              Upload All Ready ({readyCount})
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter tabs */}
@@ -182,14 +210,25 @@ export function Jobs() {
               <p className="text-sm text-status-failed mt-1">{job.error}</p>
             )}
 
-            {/* Video preview */}
+            {/* Side-by-side video preview */}
             {job.status === "ready" && previewJob === job.id && (
-              <div className="mt-3">
-                <video
-                  controls
-                  className="w-full max-h-[400px] rounded-lg bg-black"
-                  src={`http://localhost:9090/files/${job.run_date}/optimized/${job.video_id}_opt.mp4`}
-                />
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-text-muted mb-1">Original</p>
+                  <video
+                    controls
+                    className="w-full max-h-[300px] rounded-lg bg-black"
+                    src={`http://localhost:9090/files/${job.run_date}/originals/${job.video_id}.mp4`}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted mb-1">Optimized</p>
+                  <video
+                    controls
+                    className="w-full max-h-[300px] rounded-lg bg-black"
+                    src={`http://localhost:9090/files/${job.run_date}/optimized/${job.video_id}-o.mp4`}
+                  />
+                </div>
               </div>
             )}
 

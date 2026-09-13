@@ -196,6 +196,24 @@ func HandleCancelJob(db *store.DB, r relay.Relay) gin.HandlerFunc {
 	}
 }
 
+// HandleClearJobs deletes jobs by status (or all).
+func HandleClearJobs(db *store.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := auth.UserID(c)
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		status := c.Query("status")
+		count, err := db.DeleteJobs(c.Request.Context(), userID, status)
+		if err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": count})
+	}
+}
+
 type uploadRequest struct {
 	DeleteOriginal bool `json:"delete_original"`
 }

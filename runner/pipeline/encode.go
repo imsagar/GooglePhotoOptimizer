@@ -24,7 +24,7 @@ func HandleEncode(ctx context.Context, sendStatus func(protocol.Status), ffmpegP
 
 	base := filepath.Base(originalPath)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
-	outputPath := filepath.Join(dir, name+"_opt.mp4")
+	outputPath := filepath.Join(dir, name+"-o.mp4")
 
 	err := ffmpeg.Encode(ctx, ffmpegPath, originalPath, outputPath, opts, durationMs, func(pct int) {
 		sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "encoding", Percent: pct})
