@@ -13,6 +13,8 @@ type Command struct {
 	Codec          string   `json:"codec,omitempty"`
 	CRF            int      `json:"crf,omitempty"`
 	Preset         string   `json:"preset,omitempty"`
+	Filename       string   `json:"filename,omitempty"`
+	CreatedTime    string   `json:"created_time,omitempty"`
 	RunDate        string   `json:"run_date,omitempty"`
 	DeleteOriginal bool     `json:"delete_original,omitempty"`
 	Targets        []string `json:"targets,omitempty"` // for delete_local
@@ -33,6 +35,7 @@ type Status struct {
 	ETASeconds       int             `json:"eta_seconds,omitempty"`
 	OriginalSize     int64           `json:"original_size,omitempty"`
 	OptimizedSize    int64           `json:"optimized_size,omitempty"`
+	DriveFileID      string          `json:"drive_file_id,omitempty"`
 	OriginalDeleted  bool            `json:"original_deleted,omitempty"`
 	SizeVerified     bool            `json:"size_verified,omitempty"`
 	DurationVerified bool            `json:"duration_verified,omitempty"`

@@ -6,15 +6,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// Memory is an in-memory Relay implementation, suitable for a single server
-// instance. Swap for a Redis-backed Relay if the server scales horizontally.
 type Memory struct {
 	mu   sync.RWMutex
-	subs map[string]chan []byte // key: "userID:channel"
+	subs map[string][]chan []byte // key: "userID:channel"
 }
 
 func NewMemory() *Memory {
-	return &Memory{subs: make(map[string]chan []byte)}
+	return &Memory{subs: make(map[string][]chan []byte)}
 }
 
 func key(userID uuid.UUID, ch string) string {
@@ -24,18 +22,26 @@ func key(userID uuid.UUID, ch string) string {
 func (m *Memory) Subscribe(userID uuid.UUID, channel string) <-chan []byte {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	k := key(userID, channel)
 	ch := make(chan []byte, 64)
-	m.subs[key(userID, channel)] = ch
+	m.subs[k] = append(m.subs[k], ch)
 	return ch
 }
 
-func (m *Memory) Unsubscribe(userID uuid.UUID, channel string) {
+func (m *Memory) Unsubscribe(userID uuid.UUID, channel string, ch <-chan []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	k := key(userID, channel)
-	if ch, ok := m.subs[k]; ok {
-		close(ch)
-		delete(m.subs, k)
+	list := m.subs[k]
+	for i, c := range list {
+		if c == ch {
+			close(c)
+			m.subs[k] = append(list[:i], list[i+1:]...)
+			if len(m.subs[k]) == 0 {
+				delete(m.subs, k)
+			}
+			return
+		}
 	}
 }
 
@@ -43,8 +49,7 @@ func (m *Memory) send(userID uuid.UUID, channel string, msg []byte) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	k := key(userID, channel)
-	ch, ok := m.subs[k]
-	if ok {
+	for _, ch := range m.subs[k] {
 		select {
 		case ch <- msg:
 		default:

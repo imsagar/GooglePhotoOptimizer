@@ -100,6 +100,24 @@ export function Settings() {
         )}
       </div>
 
+      {/* Reset Jobs */}
+      <div className={cardClass}>
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Reset All</h2>
+        <p className="text-text-secondary text-sm mb-4">
+          Clear all jobs and videos. This cannot be undone.
+        </p>
+        <button
+          onClick={async () => {
+            if (!confirm("This will delete ALL jobs and clear the video list. Are you sure?")) return;
+            await api.post("/jobs/reset");
+            await api.del("/videos");
+          }}
+          className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          Reset All
+        </button>
+      </div>
+
       {/* Optimization Defaults */}
       <div className={cardClass}>
         <h2 className="text-lg font-semibold text-text-primary mb-4">Optimization Defaults</h2>

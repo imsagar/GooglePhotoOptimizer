@@ -6,12 +6,38 @@ const PAGE_SIZE = 50;
 
 type VideoRow = Video & { status?: string };
 
+function VideoThumb({ url, filename }: { url?: string; filename: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) {
+    const initial = (filename || "V")[0].toUpperCase();
+    const hue = filename.split("").reduce((h, c) => h + c.charCodeAt(0), 0) % 360;
+    return (
+      <div
+        className="w-full h-full flex items-center justify-center text-2xl font-bold text-white/80"
+        style={{ backgroundColor: `hsl(${hue}, 40%, 30%)` }}
+      >
+        {initial}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={`${url}=w320-h180-c`}
+      alt={filename}
+      className="w-full h-full object-cover"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function Videos() {
   const [videos, setVideos] = useState<VideoRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [picking, setPicking] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
 
   const fetchVideos = () => {
     const params = new URLSearchParams();
@@ -59,14 +85,20 @@ export function Videos() {
   };
 
   const handleOptimize = async () => {
-    await api.post("/jobs", {
-      video_ids: Array.from(selected),
-      codec: "libx265",
-      crf: 28,
-      preset: "medium",
-    });
-    setSelected(new Set());
-    fetchVideos();
+    if (optimizing) return;
+    setOptimizing(true);
+    try {
+      await api.post("/jobs", {
+        video_ids: Array.from(selected),
+        codec: "libx265",
+        crf: 28,
+        preset: "slow",
+      });
+      setSelected(new Set());
+      fetchVideos();
+    } finally {
+      setOptimizing(false);
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -123,11 +155,11 @@ export function Videos() {
             {picking ? "Picking…" : "Pick Videos from Google Photos"}
           </button>
           <button
-            disabled={selected.size === 0}
+            disabled={selected.size === 0 || optimizing}
             onClick={handleOptimize}
             className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Optimize Selected ({selected.size})
+            {optimizing ? "Optimizing…" : `Optimize Selected (${selected.size})`}
           </button>
         </div>
       </div>
@@ -152,37 +184,21 @@ export function Videos() {
           >
             {/* Thumbnail / Player */}
             <div className="aspect-video bg-bg-secondary relative">
-              {playingVideo === v.id && v.base_url ? (
+              {playingVideo === v.id ? (
                 <video
                   autoPlay
                   controls
                   className="w-full h-full object-contain bg-black"
                   src={`${v.base_url}=dv`}
                   onClick={(e) => e.stopPropagation()}
+                  onError={() => setPlayingVideo(null)}
                 />
               ) : (
                 <>
-                  {v.base_url ? (
-                    <img
-                      src={`${v.base_url}=w320-h180-c`}
-                      alt={v.filename}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-                      }}
-                    />
-                  ) : null}
-                  <button
-                    className={`absolute inset-0 flex items-center justify-center ${v.base_url ? "hidden" : ""}`}
-                    onClick={(e) => { e.stopPropagation(); if (v.base_url) setPlayingVideo(v.id); }}
-                  >
-                    <span className="text-text-muted text-3xl">▶</span>
-                  </button>
+                  <VideoThumb url={v.base_url} filename={v.filename} />
                   {v.base_url && (
                     <button
-                      className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity"
+                      className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity"
                       onClick={(e) => { e.stopPropagation(); setPlayingVideo(v.id); }}
                     >
                       <span className="text-white text-4xl drop-shadow-lg">▶</span>

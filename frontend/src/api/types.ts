@@ -22,6 +22,7 @@ export interface Video {
 export interface Job {
   id: number;
   video_id: string;
+  filename?: string;
   status: "queued" | "downloading" | "encoding" | "ready" | "uploading" | "uploaded" | "failed" | "cancelled";
   run_date: string;
   original_size: number;
@@ -30,9 +31,14 @@ export interface Job {
   codec: string;
   crf: number;
   preset: string;
+  drive_file_id?: string;
   error?: string;
   progress: number;
   delete_original: boolean;
+  downloaded_at?: string;
+  optimized_at?: string;
+  uploaded_at?: string;
+  created_at?: string;
 }
 
 export interface Paginated<T> {

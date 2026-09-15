@@ -44,12 +44,14 @@ func HandleCreateJobs(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		runDate := time.Now().Format("2006-01-02")
 		params := make([]store.CreateJobParams, len(req.VideoIDs))
 		for i, vid := range req.VideoIDs {
+			meta, _ := db.GetVideoMeta(c.Request.Context(), userID, vid)
 			params[i] = store.CreateJobParams{
-				VideoID: vid,
-				Codec:   req.Codec,
-				CRF:     req.CRF,
-				Preset:  req.Preset,
-				RunDate: runDate,
+				VideoID:  vid,
+				Filename: meta.Filename,
+				Codec:    req.Codec,
+				CRF:      req.CRF,
+				Preset:   req.Preset,
+				RunDate:  runDate,
 			}
 		}
 
@@ -62,15 +64,21 @@ func HandleCreateJobs(db *store.DB, r relay.Relay) gin.HandlerFunc {
 
 		for _, j := range jobs {
 			baseURL, _ := db.GetVideoBaseURL(c.Request.Context(), userID, j.VideoID)
-			cmd, err := json.Marshal(protocol.Command{
-				Type:    "download",
-				VideoID: j.VideoID,
-				BaseURL: baseURL,
-				JobID:   j.ID,
-				Codec:   j.Codec,
+			meta, _ := db.GetVideoMeta(c.Request.Context(), userID, j.VideoID)
+			cmdObj := protocol.Command{
+				Type:     "download",
+				VideoID:  j.VideoID,
+				Filename: meta.Filename,
+				BaseURL:  baseURL,
+				JobID:    j.ID,
+				Codec:    j.Codec,
 				CRF:     j.CRF,
 				Preset:  j.Preset,
-			})
+			}
+			if meta.CreatedTime != nil {
+				cmdObj.CreatedTime = meta.CreatedTime.Format(time.RFC3339)
+			}
+			cmd, err := json.Marshal(cmdObj)
 			if err != nil {
 				continue
 			}
@@ -219,6 +227,88 @@ func HandleClearJobs(db *store.DB) gin.HandlerFunc {
 	}
 }
 
+// HandleResetJobs deletes ALL jobs regardless of status.
+func HandleResetJobs(db *store.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := auth.UserID(c)
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		count, err := db.DeleteJobs(c.Request.Context(), userID, "")
+		if err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": count})
+	}
+}
+
+type reEncodeRequest struct {
+	Codec  string `json:"codec" binding:"required"`
+	CRF    int    `json:"crf" binding:"required"`
+	Preset string `json:"preset" binding:"required"`
+}
+
+func HandleReEncodeJob(db *store.DB, r relay.Relay) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := auth.UserID(c)
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		jobID, ok := jobIDParam(c)
+		if !ok {
+			return
+		}
+
+		job, err := db.GetJob(c.Request.Context(), jobID, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+				return
+			}
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+
+		var req reEncodeRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := db.ResetJobForReEncode(c.Request.Context(), jobID, userID, req.Codec, req.CRF, req.Preset); err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+
+		meta, _ := db.GetVideoMeta(c.Request.Context(), userID, job.VideoID)
+		cmdObj := protocol.Command{
+			Type:    "encode",
+			JobID:   job.ID,
+			VideoID: job.VideoID,
+			RunDate: job.RunDate,
+			Codec:   req.Codec,
+			CRF:     req.CRF,
+			Preset:  req.Preset,
+		}
+		if meta.Filename != "" {
+			cmdObj.Filename = meta.Filename
+		}
+		if meta.CreatedTime != nil {
+			cmdObj.CreatedTime = meta.CreatedTime.Format(time.RFC3339)
+		}
+		cmd, err := json.Marshal(cmdObj)
+		if err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		r.SendToRunner(userID, cmd)
+		c.JSON(http.StatusAccepted, gin.H{"status": "re-encoding"})
+	}
+}
+
 type uploadRequest struct {
 	DeleteOriginal bool `json:"delete_original"`
 }
@@ -251,7 +341,12 @@ func HandleUploadJob(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		_ = c.ShouldBindJSON(&req) // optional body; default delete_original=false overrides nothing if absent
 		deleteOriginal := req.DeleteOriginal || job.DeleteOriginal
 
-		cmd, err := json.Marshal(protocol.Command{Type: "upload", JobID: job.ID, VideoID: job.VideoID, RunDate: job.RunDate, DeleteOriginal: deleteOriginal})
+		meta, _ := db.GetVideoMeta(c.Request.Context(), userID, job.VideoID)
+		cmdObj := protocol.Command{Type: "upload", JobID: job.ID, VideoID: job.VideoID, Filename: meta.Filename, RunDate: job.RunDate, DeleteOriginal: deleteOriginal}
+		if meta.CreatedTime != nil {
+			cmdObj.CreatedTime = meta.CreatedTime.Format(time.RFC3339)
+		}
+		cmd, err := json.Marshal(cmdObj)
 		if err != nil {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
@@ -280,7 +375,12 @@ func HandleBulkUpload(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		}
 
 		for _, j := range jobs {
-			cmd, err := json.Marshal(protocol.Command{Type: "upload", JobID: j.ID, VideoID: j.VideoID, RunDate: j.RunDate, DeleteOriginal: j.DeleteOriginal})
+			meta, _ := db.GetVideoMeta(c.Request.Context(), userID, j.VideoID)
+			cmdObj := protocol.Command{Type: "upload", JobID: j.ID, VideoID: j.VideoID, Filename: meta.Filename, RunDate: j.RunDate, DeleteOriginal: j.DeleteOriginal}
+			if meta.CreatedTime != nil {
+				cmdObj.CreatedTime = meta.CreatedTime.Format(time.RFC3339)
+			}
+			cmd, err := json.Marshal(cmdObj)
 			if err != nil {
 				continue
 			}

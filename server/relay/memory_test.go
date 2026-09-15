@@ -35,7 +35,7 @@ func TestMemoryRelay(t *testing.T) {
 		t.Fatal("timed out waiting for runner message")
 	}
 
-	m.Unsubscribe(userID, ChanUI)
+	m.Unsubscribe(userID, ChanUI, ui)
 	if _, open := <-ui; open {
 		t.Error("ui channel should be closed after Unsubscribe")
 	}

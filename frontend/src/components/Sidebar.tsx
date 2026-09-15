@@ -4,7 +4,7 @@ import { RunnerBadge } from "./RunnerBadge";
 const links = [
   { to: "/", label: "Dashboard" },
   { to: "/videos", label: "Videos" },
-  { to: "/jobs", label: "Jobs" },
+  { to: "/library", label: "Library" },
   { to: "/local-files", label: "Local Files" },
   { to: "/settings", label: "Settings" },
 ];

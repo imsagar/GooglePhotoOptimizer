@@ -32,6 +32,7 @@ type jobState struct {
 	originalPath string
 	encodedPath  string
 	filename     string
+	createdTime  string
 }
 
 // runnerState holds everything the command handler needs across commands:
@@ -147,6 +148,8 @@ func (s *runnerState) handleGoogleCredentials(c *ws.Client, cmd protocol.Command
 
 	log.Println("runner: Google Photos connected via server credentials")
 	c.SendStatus(protocol.Status{Type: "google_auth_status", Connected: true})
+
+	s.reReportCompletedJobs(c)
 }
 
 func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd protocol.Command) {
@@ -163,16 +166,22 @@ func (s *runnerState) handleDownload(ctx context.Context, c *ws.Client, cmd prot
 		return
 	}
 
-	path, err := pipeline.HandleDownload(ctx, c.SendStatus, photos, s.cfg, cmd.VideoID, cmd.JobID, cmd.BaseURL)
+	path, err := pipeline.HandleDownload(ctx, c.SendStatus, photos, s.cfg, cmd.VideoID, cmd.JobID, cmd.BaseURL, cmd.Filename)
 	if err != nil {
+		log.Printf("runner: download failed job=%d: %v", cmd.JobID, err)
 		return
 	}
+	log.Printf("runner: download complete job=%d path=%s", cmd.JobID, path)
 
 	s.mu.Lock()
-	s.jobs[cmd.JobID] = &jobState{originalPath: path, filename: cmd.VideoID}
+	fname := cmd.Filename
+	if fname == "" {
+		fname = cmd.VideoID + ".mp4"
+	}
+	s.jobs[cmd.JobID] = &jobState{originalPath: path, filename: fname, createdTime: cmd.CreatedTime}
 	s.mu.Unlock()
 
-	// Auto-chain into encode
+	log.Printf("runner: chaining to encode job=%d codec=%s crf=%d preset=%s", cmd.JobID, cmd.Codec, cmd.CRF, cmd.Preset)
 	s.handleEncode(ctx, c, cmd)
 }
 
@@ -181,16 +190,33 @@ func (s *runnerState) handleEncode(ctx context.Context, c *ws.Client, cmd protoc
 	job := s.jobs[cmd.JobID]
 	s.mu.Unlock()
 
+	if job == nil && cmd.VideoID != "" && cmd.RunDate != "" {
+		fname := cmd.Filename
+		if fname == "" {
+			fname = cmd.VideoID + ".mp4"
+		}
+		job = &jobState{
+			originalPath: filepath.Join(pipeline.StoragePath(s.cfg, "originals", cmd.RunDate), fname),
+			filename:     fname,
+			createdTime:  cmd.CreatedTime,
+		}
+		s.mu.Lock()
+		s.jobs[cmd.JobID] = job
+		s.mu.Unlock()
+	}
 	if job == nil {
 		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "no downloaded file for this job"})
 		return
 	}
 
 	opts := ffmpeg.EncodeOpts{Codec: cmd.Codec, CRF: cmd.CRF, Preset: cmd.Preset}
-	outPath, err := pipeline.HandleEncode(ctx, c.SendStatus, s.ffmpegPath, s.cfg, job.originalPath, cmd.JobID, opts, 0)
+	log.Printf("runner: starting encode job=%d input=%s", cmd.JobID, job.originalPath)
+	outPath, err := pipeline.HandleEncode(ctx, c.SendStatus, s.ffmpegPath, s.cfg, job.originalPath, cmd.JobID, opts, 0, job.createdTime)
 	if err != nil {
+		log.Printf("runner: encode failed job=%d: %v", cmd.JobID, err)
 		return
 	}
+	log.Printf("runner: encode complete job=%d output=%s", cmd.JobID, outPath)
 
 	s.mu.Lock()
 	job.encodedPath = outPath
@@ -210,15 +236,29 @@ func (s *runnerState) handleUpload(ctx context.Context, c *ws.Client, cmd protoc
 
 	// Derive paths from command if in-memory state was lost (runner restart)
 	if job == nil && cmd.VideoID != "" && cmd.RunDate != "" {
+		fname := cmd.Filename
+		if fname == "" {
+			fname = cmd.VideoID + ".mp4"
+		}
+		nameNoExt := fname[:len(fname)-len(filepath.Ext(fname))]
 		job = &jobState{
-			originalPath: filepath.Join(pipeline.StoragePath(s.cfg, "originals", cmd.RunDate), cmd.VideoID+".mp4"),
-			encodedPath:  filepath.Join(pipeline.StoragePath(s.cfg, "optimized", cmd.RunDate), cmd.VideoID+"-o.mp4"),
-			filename:     cmd.VideoID,
+			originalPath: filepath.Join(pipeline.StoragePath(s.cfg, "originals", cmd.RunDate), fname),
+			encodedPath:  filepath.Join(pipeline.StoragePath(s.cfg, "optimized", cmd.RunDate), nameNoExt+"-o.mp4"),
+			filename:     fname,
+			createdTime:  cmd.CreatedTime,
 		}
 	}
 	if job == nil || job.encodedPath == "" {
 		c.SendStatus(protocol.Status{Type: "error", JobID: cmd.JobID, Message: "no encoded file for this job"})
 		return
+	}
+
+	// Server sends authoritative metadata in every upload command — prefer it
+	if cmd.Filename != "" {
+		job.filename = cmd.Filename
+	}
+	if cmd.CreatedTime != "" {
+		job.createdTime = cmd.CreatedTime
 	}
 
 	origInfo, err := os.Stat(job.originalPath)
@@ -227,13 +267,38 @@ func (s *runnerState) handleUpload(ctx context.Context, c *ws.Client, cmd protoc
 		return
 	}
 
-	if err := pipeline.HandleUpload(ctx, c.SendStatus, drive, job.encodedPath, job.filename, origInfo.Size(), cmd.JobID, cmd.DeleteOriginal); err != nil {
+	if err := pipeline.HandleUpload(ctx, c.SendStatus, drive, job.encodedPath, job.filename, job.createdTime, origInfo.Size(), cmd.JobID, cmd.DeleteOriginal); err != nil {
 		return
 	}
 
 	s.mu.Lock()
 	delete(s.jobs, cmd.JobID)
 	s.mu.Unlock()
+}
+
+func (s *runnerState) reReportCompletedJobs(c *ws.Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for jobID, job := range s.jobs {
+		if job.encodedPath == "" {
+			continue
+		}
+		origInfo, err := os.Stat(job.originalPath)
+		if err != nil {
+			continue
+		}
+		optInfo, err := os.Stat(job.encodedPath)
+		if err != nil {
+			continue
+		}
+		log.Printf("runner: re-reporting completed job=%d", jobID)
+		c.SendStatus(protocol.Status{
+			Type:          "job_complete",
+			JobID:         jobID,
+			OriginalSize:  origInfo.Size(),
+			OptimizedSize: optInfo.Size(),
+		})
+	}
 }
 
 func (s *runnerState) handleDeleteLocal(c *ws.Client, cmd protocol.Command) {

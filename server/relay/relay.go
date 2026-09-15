@@ -16,5 +16,5 @@ type Relay interface {
 	SendToRunner(userID uuid.UUID, msg []byte)
 	SendToUI(userID uuid.UUID, msg []byte)
 	Subscribe(userID uuid.UUID, channel string) <-chan []byte
-	Unsubscribe(userID uuid.UUID, channel string)
+	Unsubscribe(userID uuid.UUID, channel string, ch <-chan []byte)
 }

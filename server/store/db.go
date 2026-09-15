@@ -78,6 +78,7 @@ type Job struct {
 	ID               int       `json:"id"`
 	UserID           uuid.UUID `json:"user_id"`
 	VideoID          string    `json:"video_id"`
+	Filename         string    `json:"filename,omitempty"`
 	Status           string    `json:"status"`
 	RunDate          string    `json:"run_date"`
 	OriginalSize     int64     `json:"original_size"`
@@ -86,13 +87,17 @@ type Job struct {
 	Codec            string    `json:"codec"`
 	CRF              int       `json:"crf"`
 	Preset           string    `json:"preset"`
+	DriveFileID      string    `json:"drive_file_id,omitempty"`
 	Error            string    `json:"error,omitempty"`
 	Progress         int       `json:"progress"`
 	DeleteOriginal   bool      `json:"delete_original"`
-	SizeVerified     *bool     `json:"size_verified"`
-	DurationVerified *bool     `json:"duration_verified"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	SizeVerified     *bool      `json:"size_verified"`
+	DurationVerified *bool      `json:"duration_verified"`
+	DownloadedAt     *time.Time `json:"downloaded_at,omitempty"`
+	OptimizedAt      *time.Time `json:"optimized_at,omitempty"`
+	UploadedAt       *time.Time `json:"uploaded_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type PairingCode struct {
@@ -121,9 +126,10 @@ type ListJobsParams struct {
 }
 
 type CreateJobParams struct {
-	VideoID string
-	Codec   string
-	CRF     int
-	Preset  string
-	RunDate string
+	VideoID  string
+	Filename string
+	Codec    string
+	CRF      int
+	Preset   string
+	RunDate  string
 }

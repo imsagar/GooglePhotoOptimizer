@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { api } from "../api/client";
 import type { Job, Paginated } from "../api/types";
 import { StatusBadge } from "../components/StatusBadge";
 import { ProgressBar } from "../components/ProgressBar";
-import { useWebSocket } from "../hooks/useWebSocket";
 
 function formatSize(bytes: number): string {
   if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + " GB";
@@ -23,7 +23,7 @@ function isWSEvent(e: unknown): e is WSEvent {
 }
 
 export function Dashboard() {
-  const { runnerOnline, lastEvent } = useWebSocket();
+  const { runnerOnline, lastEvent } = useOutletContext<{ runnerOnline: boolean; lastEvent: unknown }>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [videoCount, setVideoCount] = useState(0);
   const [syncing, setSyncing] = useState(false);

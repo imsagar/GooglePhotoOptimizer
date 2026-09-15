@@ -12,9 +12,10 @@ import (
 
 // EncodeOpts configures the ffmpeg video encode.
 type EncodeOpts struct {
-	Codec  string // libx265, libx264, libsvtav1
-	CRF    int
-	Preset string // ultrafast..veryslow
+	Codec        string // libx265, libx264, libsvtav1
+	CRF          int
+	Preset       string // ultrafast..veryslow
+	CreationTime string // RFC3339 capture date to embed; empty to skip
 }
 
 // Encode transcodes input to output with ffmpeg, calling progressFn with a
@@ -23,6 +24,12 @@ type EncodeOpts struct {
 func Encode(ctx context.Context, ffmpegPath, input, output string, opts EncodeOpts, totalDurationMs int, progressFn func(pct int)) error {
 	args := []string{
 		"-i", input,
+		"-map_metadata", "0",
+	}
+	if opts.CreationTime != "" {
+		args = append(args, "-metadata", "creation_time="+opts.CreationTime)
+	}
+	args = append(args,
 		"-c:v", opts.Codec,
 		"-crf", strconv.Itoa(opts.CRF),
 		"-preset", opts.Preset,
@@ -31,7 +38,7 @@ func Encode(ctx context.Context, ffmpegPath, input, output string, opts EncodeOp
 		"-progress", "pipe:1",
 		"-y",
 		output,
-	}
+	)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	stdout, err := cmd.StdoutPipe()

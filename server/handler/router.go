@@ -33,9 +33,11 @@ func NewRouter(db *store.DB, r relay.Relay, authCfg auth.Config) *gin.Engine {
 	api.GET("/jobs", HandleListJobs(db))
 	api.GET("/jobs/:id", HandleGetJob(db))
 	api.POST("/jobs/:id/cancel", HandleCancelJob(db, r))
+	api.POST("/jobs/:id/re-encode", HandleReEncodeJob(db, r))
 	api.POST("/jobs/:id/upload", HandleUploadJob(db, r))
 	api.POST("/jobs/upload-all", HandleBulkUpload(db, r))
 	api.DELETE("/jobs", HandleClearJobs(db))
+	api.POST("/jobs/reset", HandleResetJobs(db))
 
 	api.GET("/settings", HandleGetSettings())
 	api.PUT("/settings", HandlePutSettings())

@@ -44,14 +44,19 @@ func (c *DriveClient) FindFile(ctx context.Context, filename string, sizeBytes i
 	return "", fmt.Errorf("file not found: %s (%d bytes)", filename, sizeBytes)
 }
 
-func (c *DriveClient) Upload(ctx context.Context, filePath, filename string) (string, error) {
+func (c *DriveClient) Upload(ctx context.Context, filePath, filename, createdTime string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	file, err := c.svc.Files.Create(&drive.File{Name: filename}).
+	meta := &drive.File{Name: filename}
+	if createdTime != "" {
+		meta.CreatedTime = createdTime
+		meta.ModifiedTime = createdTime
+	}
+	file, err := c.svc.Files.Create(meta).
 		Media(f).Context(ctx).Do()
 	if err != nil {
 		return "", err

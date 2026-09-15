@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
@@ -120,6 +121,7 @@ func HandlePickerPoll(db *store.DB, cfg auth.Config) gin.HandlerFunc {
 
 		items, err := fetchPickerItems(client, sessionID)
 		if err != nil {
+			log.Printf("picker: fetch items failed: %v", err)
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
@@ -130,12 +132,18 @@ func HandlePickerPoll(db *store.DB, cfg auth.Config) gin.HandlerFunc {
 			if item.Type != "VIDEO" {
 				continue
 			}
-			videos = append(videos, store.Video{
+			v := store.Video{
 				ID:       item.ID,
 				Filename: item.MediaFile.Filename,
 				MimeType: item.MediaFile.MimeType,
 				BaseURL:  item.MediaFile.BaseURL,
-			})
+			}
+			if t, err := time.Parse(time.RFC3339, item.CreateTime); err == nil {
+				v.CreationTime = &t
+			}
+			v.Width = item.MediaFile.Metadata.Width
+			v.Height = item.MediaFile.Metadata.Height
+			videos = append(videos, v)
 		}
 
 		if len(videos) > 0 {
@@ -147,12 +155,19 @@ func HandlePickerPoll(db *store.DB, cfg auth.Config) gin.HandlerFunc {
 }
 
 type pickerItem struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	MediaFile struct {
+	ID string `json:"id"`
+	// CreateTime is the media's capture date. The Picker API returns it at
+	// the item's top level, NOT inside mediaFileMetadata.
+	CreateTime string `json:"createTime"`
+	Type       string `json:"type"`
+	MediaFile  struct {
 		BaseURL  string `json:"baseUrl"`
 		MimeType string `json:"mimeType"`
 		Filename string `json:"filename"`
+		Metadata struct {
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		} `json:"mediaFileMetadata"`
 	} `json:"mediaFile"`
 }
 

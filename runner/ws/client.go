@@ -79,9 +79,6 @@ func (c *Client) connect() error {
 	if err != nil {
 		return err
 	}
-	c.mu.Lock()
-	c.conn = conn
-	c.mu.Unlock()
 	defer conn.Close()
 
 	conn.SetReadDeadline(time.Now().Add(45 * time.Second))
@@ -90,8 +87,6 @@ func (c *Client) connect() error {
 		return conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
 	})
 
-	// Auth is the one unencrypted message: the runner has no key until the
-	// server confirms this token (see HandleRunnerWebSocket).
 	authMsg, _ := json.Marshal(map[string]string{
 		"type":  "auth",
 		"token": c.cfg.Token,
@@ -99,6 +94,18 @@ func (c *Client) connect() error {
 	if err := conn.WriteMessage(websocket.TextMessage, authMsg); err != nil {
 		return err
 	}
+
+	c.mu.Lock()
+	c.conn = conn
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		if c.conn == conn {
+			c.conn = nil
+		}
+		c.mu.Unlock()
+	}()
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -143,6 +150,11 @@ func (c *Client) SendStatus(s protocol.Status) {
 }
 
 func (c *Client) handleCommand(cmd protocol.Command) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("runner ws: panic handling command %q job=%d: %v", cmd.Type, cmd.JobID, r)
+		}
+	}()
 	if c.cmdFn == nil {
 		log.Printf("runner ws: received command %q but no handler is registered", cmd.Type)
 		return

@@ -36,7 +36,7 @@ func HandleUIWebSocket(db *store.DB, r relay.Relay) gin.HandlerFunc {
 		defer conn.Close()
 
 		ch := r.Subscribe(userID, relay.ChanUI)
-		defer r.Unsubscribe(userID, relay.ChanUI)
+		defer r.Unsubscribe(userID, relay.ChanUI, ch)
 
 		runner, err := db.GetRunnerByUserID(c.Request.Context(), userID)
 		if err == nil && runner.Status == "online" {
@@ -124,7 +124,7 @@ func HandleRunnerWebSocket(db *store.DB, r relay.Relay, authCfg auth.Config) gin
 		}
 
 		cmdCh := r.Subscribe(userID, relay.ChanRunner)
-		defer r.Unsubscribe(userID, relay.ChanRunner)
+		defer r.Unsubscribe(userID, relay.ChanRunner, cmdCh)
 
 		// Reader runs in its own goroutine so we can also write commands to
 		// the runner as they arrive on cmdCh; `done` lets the write loop
@@ -190,6 +190,9 @@ func handleRunnerStatus(ctx context.Context, db *store.DB, r relay.Relay, userID
 		if err := db.UpdateJobStatus(ctx, s.JobID, userID, s.Stage, s.Percent); err != nil {
 			log.Printf("runner ws: update job status: %v", err)
 		}
+		if s.Stage == "encoding" && s.Percent == 0 {
+			_ = db.SetJobDownloadedAt(ctx, s.JobID, userID)
+		}
 	case "job_complete":
 		var savingsPct float32
 		if s.OriginalSize > 0 {
@@ -204,6 +207,12 @@ func handleRunnerStatus(ctx context.Context, db *store.DB, r relay.Relay, userID
 	case "upload_complete":
 		if err := db.UpdateJobStatus(ctx, s.JobID, userID, "uploaded", 100); err != nil {
 			log.Printf("runner ws: update job status: %v", err)
+		}
+		_ = db.SetJobUploadedAt(ctx, s.JobID, userID)
+		if s.DriveFileID != "" {
+			if err := db.UpdateJobDriveFileID(ctx, s.JobID, userID, s.DriveFileID); err != nil {
+				log.Printf("runner ws: update drive file id: %v", err)
+			}
 		}
 	case "error":
 		if err := db.UpdateJobError(ctx, s.JobID, userID, s.Message); err != nil {

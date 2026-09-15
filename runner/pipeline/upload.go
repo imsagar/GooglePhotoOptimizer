@@ -17,10 +17,10 @@ import (
 // ponytail: verification is size-only; Drive doesn't expose video duration
 // without an extra metadata fetch. Add a duration check if size collisions
 // turn out to be a real risk.
-func HandleUpload(ctx context.Context, sendStatus func(protocol.Status), drv *google.DriveClient, optimizedPath string, originalFilename string, originalSize int64, jobID int, deleteOriginal bool) error {
+func HandleUpload(ctx context.Context, sendStatus func(protocol.Status), drv *google.DriveClient, optimizedPath string, originalFilename string, createdTime string, originalSize int64, jobID int, deleteOriginal bool) error {
 	sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "uploading", Percent: 0})
 
-	newFileID, err := drv.Upload(ctx, optimizedPath, originalFilename)
+	newFileID, err := drv.Upload(ctx, optimizedPath, originalFilename, createdTime)
 	if err != nil {
 		sendStatus(protocol.Status{Type: "error", JobID: jobID, Message: fmt.Sprintf("upload: %v", err)})
 		return err
@@ -45,6 +45,7 @@ func HandleUpload(ctx context.Context, sendStatus func(protocol.Status), drv *go
 	result := protocol.Status{
 		Type:         "upload_complete",
 		JobID:        jobID,
+		DriveFileID:  newFileID,
 		SizeVerified: true,
 	}
 

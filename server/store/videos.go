@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -149,6 +150,19 @@ func (db *DB) DeleteAllVideos(ctx context.Context, userID uuid.UUID) (int64, err
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+type VideoMeta struct {
+	Filename    string
+	CreatedTime *time.Time
+}
+
+func (db *DB) GetVideoMeta(ctx context.Context, userID uuid.UUID, videoID string) (VideoMeta, error) {
+	var m VideoMeta
+	err := db.pool.QueryRowContext(ctx,
+		`SELECT filename, creation_time FROM videos WHERE id = $1 AND user_id = $2`, videoID, userID,
+	).Scan(&m.Filename, &m.CreatedTime)
+	return m, err
 }
 
 func (db *DB) GetVideoBaseURL(ctx context.Context, userID uuid.UUID, videoID string) (string, error) {

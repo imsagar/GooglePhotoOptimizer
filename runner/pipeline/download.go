@@ -43,13 +43,17 @@ func StorageBase(cfg *config.Config) string {
 // HandleDownload downloads videoID's original file from Google Photos to
 // local storage, reporting progress via sendStatus. Returns the local path
 // the file was written to.
-func HandleDownload(ctx context.Context, sendStatus func(protocol.Status), photos *google.PhotosClient, cfg *config.Config, videoID string, jobID int, baseURL string) (string, error) {
+func HandleDownload(ctx context.Context, sendStatus func(protocol.Status), photos *google.PhotosClient, cfg *config.Config, videoID string, jobID int, baseURL string, filename string) (string, error) {
 	dir := StoragePath(cfg, "originals", "")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		sendStatus(protocol.Status{Type: "error", JobID: jobID, Message: fmt.Sprintf("download: %v", err)})
 		return "", err
 	}
-	destPath := filepath.Join(dir, videoID+".mp4")
+	localName := filename
+	if localName == "" {
+		localName = videoID + ".mp4"
+	}
+	destPath := filepath.Join(dir, localName)
 
 	sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "downloading", Percent: 0})
 
@@ -58,8 +62,12 @@ func HandleDownload(ctx context.Context, sendStatus func(protocol.Status), photo
 		resumeFrom = info.Size()
 	}
 
+	var lastPct int
 	if err := photos.DownloadVideo(ctx, baseURL, destPath, resumeFrom, func(pct int) {
-		sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "downloading", Percent: pct})
+		if pct == 0 || pct == 100 || pct-lastPct >= 3 {
+			sendStatus(protocol.Status{Type: "progress", JobID: jobID, Stage: "downloading", Percent: pct})
+			lastPct = pct
+		}
 	}); err != nil {
 		sendStatus(protocol.Status{Type: "error", JobID: jobID, Message: fmt.Sprintf("download: %v", err)})
 		return "", err
